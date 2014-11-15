@@ -1,3 +1,6 @@
 [submodule "zoobar"]
 	path = zoobar
 	url = https://github.com/jonhoo/django-zoobar.git
+[submodule "symex/z3str"]
+	path = symex/z3str
+	url = git://g.csail.mit.edu/z3str

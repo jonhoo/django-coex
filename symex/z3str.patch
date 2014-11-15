@@ -1,0 +1,13 @@
+--- z3str/z3str/z3str.py	2014-11-15 14:23:06.276525033 -0500
++++ z3str.py	2014-11-15 14:56:23.257124399 -0500
+@@ -1,8 +1,8 @@
+ #!/usr/bin/python
+ 
+-## Figure out where the top-level checkout of the "z3str" repo lives
++## Figure out where the z3str library lives
+ import os
+-z3strdir = os.path.dirname(os.path.abspath(__file__)) + '/..'
++z3strdir = os.path.dirname(os.path.abspath(__file__)) + '/z3str'
+ 
+ ## Change the python path to load the Z3 python bindings from z3str
+ import sys

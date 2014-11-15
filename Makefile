@@ -3,7 +3,7 @@
 
 .PHONY: all
 all:
-	:
+	make -C symex
 
 .PHONY: clean
 clean:

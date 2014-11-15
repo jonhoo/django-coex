@@ -1,0 +1,19 @@
+--- byteplay.py	2010-09-20 14:39:39.000000000 -0400
++++ byteplay.py	2014-11-15 13:49:14.397449167 -0500
+@@ -488,8 +488,14 @@
+                 if stacks[pos] is None:
+                     stacks[pos] = curstack
+                 else:
+-                    if stacks[pos] != curstack:
+-                        raise ValueError, "Inconsistent code"
++                    fudgestack = curstack
++                    while stacks[pos] != fudgestack and \
++                          len(fudgestack) > 0 and \
++                          fudgestack[-1] == 0:
++                      fudgestack = fudgestack[:-1]
++                    if stacks[pos] != fudgestack:
++                        raise ValueError, "Inconsistent code %s (%d): %s != %s" % \
++                                          (op, pos, stacks[pos], curstack)
+                     return
+ 
+             def newstack(n):
