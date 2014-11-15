@@ -1,0 +1,3 @@
+[submodule "zoobar"]
+	path = zoobar
+	url = https://github.com/jonhoo/django-zoobar.git
