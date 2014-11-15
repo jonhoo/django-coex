@@ -20,3 +20,10 @@ byteplay-upstream.py:
 
 byteplay.py: byteplay-upstream.py byteplay.patch
 	patch -i byteplay.patch -o $@ byteplay-upstream.py
+
+.PHONY: clean
+clean:
+	rm -f byteplay-upstream.py byteplay.py
+	rm -f z3str.py
+	make -C z3str/z3str clean
+	make -C z3str/z3 clean

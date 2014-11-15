@@ -7,4 +7,4 @@ all:
 
 .PHONY: clean
 clean:
-	:
+	make -C symex clean
