@@ -714,19 +714,23 @@ def concolic_test(testfunc, maxiter = 100, verbose = 0):
         checked.add(left)
 
         (ok, model) = fork_and_check(left)
-        new_values = concrete_values.copy()
-        for key in model:
-          new_values[key] = model[key]
-        inputs.add(new_values, cur_path_constr_callers[i])
+        if ok:
+            new_values = concrete_values.copy()
+            if model is not None:
+                for key in model:
+                  new_values[key] = model[key]
+            inputs.add(new_values, cur_path_constr_callers[i])
 
       if right not in checked:
         checked.add(right)
 
         (ok, model) = fork_and_check(right)
-        new_values = concrete_values.copy()
-        for key in model:
-          new_values[key] = model[key]
-        inputs.add(new_values, cur_path_constr_callers[i])
+        if ok:
+            new_values = concrete_values.copy()
+            if model is not None:
+                for key in model:
+                  new_values[key] = model[key]
+            inputs.add(new_values, cur_path_constr_callers[i])
 
   if verbose > 0:
     print 'Stopping after', iter, 'iterations'
