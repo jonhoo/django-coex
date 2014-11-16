@@ -38,6 +38,7 @@ d = SymDjango(app, os.path.abspath(os.path.dirname(__file__) + '/app'), appviews
 
 # Only safe to load now that it's been patched and added to import path
 import zoobar
+from django.utils.encoding import force_bytes
 
 def report_balance_mismatch():
   print("WARNING: Balance mismatch detected")
@@ -137,4 +138,12 @@ def test_stuff():
         # requests, and which user the request was issued as, but this seems
         # outside the scope of the exercise?
 
-fuzzy.concolic_test(test_stuff, maxiter=2000, verbose=1)
+class NewForceBytes():
+    def __call__(self, s, *args, **kwargs):
+        if isinstance(s, fuzzy.concolic_str):
+            return s
+        return force_bytes(s, *args, **kwargs)
+
+with patch('django.utils.encoding.force_bytes', new_callable=NewForceBytes) as bmock:
+    with patch('django.test.client.force_bytes', new_callable=NewForceBytes) as bmock:
+        fuzzy.concolic_test(test_stuff, maxiter=2000, verbose=0)
