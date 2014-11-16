@@ -1,9 +1,4 @@
 /*.o
 /*.log
-/zookd
-/zookfs
-/zookld
-/zooksvc
-/run-shellcode
 /app
 /result.html
