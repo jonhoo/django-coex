@@ -1,41 +1,57 @@
 #!/usr/bin/env python
 
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/app')
-sys.path.insert(1, os.path.dirname(os.path.abspath(__file__)) + '/../django-concolic')
-
-import importlib
-from django.core.urlresolvers import ResolverMatch, Resolver404, RegexURLResolver
-from django.core.handlers.wsgi import WSGIRequest
-from django.core.servers.basehttp import get_internal_wsgi_application
-from django.conf import settings
-from django.test.client import FakePayload, RequestFactory
-
+# name of app being mocked
 app = "zoobar"
+
+# route matches module.view if [module][view] lambda returns true
 appviews = {
         "zapp": {
             "index": (lambda p: p == "/")
         },
         "zlogio": {
-            "login": (lambda p: p == "accounts/login/"),
-            "logout": (lambda p: p == "accounts/logout/"),
+            "login": (lambda p: p == "/accounts/login/"),
+            "logout": (lambda p: p == "/accounts/logout/"),
             }
 
         }
+
+# reverse lookup; module.routename => path (given args + kwargs)
 reverse = {
         "zapp": {
-            "index": "/"
+            "index": (lambda: "/")
         },
         "": {
-            "login": "/accounts/login/",
-            "logout": "/accounts/logout/"
+            "login": (lambda: "/accounts/login/"),
+            "logout": (lambda: "/accounts/logout/")
         },
 }
 
+import sys
+import os
+
+# search for modules inside application under test
+sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/app')
+
+# use our Django (currently irrelevant)
+sys.path.insert(1, os.path.dirname(os.path.abspath(__file__)) + '/../django-concolic')
+
+# patch Django where needed
+from unittest.mock import patch
+
+# Dynamic imports
+import importlib
+
+# Various items needed to invoke Django directly
+from django.core.urlresolvers import ResolverMatch, Resolver404, NoReverseMatch
+from django.core.handlers.wsgi import WSGIRequest
+from django.core.servers.basehttp import get_internal_wsgi_application
+from django.conf import settings
+from django.test.client import FakePayload, RequestFactory
+
+# Make sure Django reads the correct settings
 os.environ.update({
     "DJANGO_SETTINGS_MODULE": "app." + app + ".settings"
-    })
+})
 
 class SymURL():
     def __init__(self, mod, v):
@@ -63,71 +79,48 @@ class SymURL():
             views = importlib.import_module(self.mod + '.views')
             return ResolverMatch(getattr(views, self.view), args, kwargs, self.view)
 
-class SymNS():
-    def __init__(self, m):
-        self.mod = m
-        RegexURLResolver.__init__(self, "^$", app + ".urls", namespace=self.mod)
+class SymResolver():
+    def __init__(self, regex, conf):
+        self.mod = ""
 
-    def __repr__(self):
-        return str("SymNS for %s" % self.mod)
+    def setMod(self, mod):
+        self.mod = mod
 
     def resolve(self, path):
-        print("%s resolving %s" % (self.mod, path))
-        if self.mod == "app":
-            print("hmm")
-            return None
+        print("resolving path '%s'" % path)
+        for m in appviews:
+            for v in appviews[m]:
+                s = SymURL(m, v)
+                r = s.resolve(path)
+                if r is not None:
+                    return r
 
-        for v in appviews[self.mod]:
-            s = SymURL(self.mod, v)
-            r = s.resolve(path)
-            if r is not None:
-                return r
-
-    @property
-    def handles_namespace(self):
-        return self.mod
-
-    @property
-    def handles_reverse(self):
-        global reverse
-        if self.mod in reverse:
-            return reverse[self.mod].keys()
-        return []
-
-    def handle_reverse(self, v):
-        return self._reverse_with_prefix(v, '')
+        raise Resolver404({'path': path})
 
     def _reverse_with_prefix(self, v, _prefix, *args, **kwargs):
         global reverse
 
-        print("looking up reverse for '%s' using namespace '%s'" % (v, self.mod))
-        if self.mod in reverse and v in reverse[self.mod]:
-            return reverse[self.mod][v]
+        print("looking up reverse for '%s' in '%s'" % (v, self.mod))
+        if v in reverse[self.mod]:
+            return reverse[self.mod][v](*args, **kwargs)
 
-        raise NoReverseMatch("Reverse for '%s' with arguments '%s' and keyword "
-                + "arguments '%s' not found." % (v, args, kwargs))
-
-syms = []
-for m in appviews:
-    syms.append(SymNS(m))
-syms.append(SymNS(""))
-
-class SymWSGIRequest(WSGIRequest):
-    def __init__(self, environ):
-        WSGIRequest.__init__(self, environ)
+        raise NoReverseMatch("Reverse for '%s' in '%s' with arguments '%s' and keyword "
+                "arguments '%s' not found." % (v, self.mod, args, kwargs))
 
     @property
-    def urlpatterns(self):
-        global syms
-        return syms
+    def namespace_dict(self):
+        global reverseDict
+        return reverseDict
 
     @property
-    def urlconf(self):
-        return self
+    def app_dict(self):
+        return {}
 
-    def _reverse_with_prefix(self, *args, **kwargs):
-        print("asked to do something")
-
+reverseDict = {}
+for m in reverse:
+    s = SymResolver("", None)
+    s.setMod(m)
+    reverseDict[m] = ("", s)
 
 class SymRequestFactory(RequestFactory):
     def __init__(self, start_response, **defaults):
@@ -136,8 +129,8 @@ class SymRequestFactory(RequestFactory):
 
     def request(self, **request):
         handler = get_internal_wsgi_application()
-        handler.request_class = SymWSGIRequest
-        return handler(self._base_environ(**request), start_response)
+        with patch('django.core.urlresolvers.RegexURLResolver', new=SymResolver) as urlmock:
+            return handler(self._base_environ(**request), start_response)
 
 def start_response(status, response_headers):
     print("\n%18s: %s" % ("RESULT", status))
