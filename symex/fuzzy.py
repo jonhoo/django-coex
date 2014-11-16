@@ -187,8 +187,13 @@ class sym_minus(sym_binop):
   def _z3expr(self, printable):
     return z3expr(self.a, printable) - z3expr(self.b, printable)
 
-## Exercise 2: your code here.
-## Implement AST nodes for division and multiplication.
+class sym_mul(sym_binop):
+  def _z3expr(self, printable):
+    return z3expr(self.a, printable) * z3expr(self.b, printable)
+
+class sym_div(sym_binop):
+  def _z3expr(self, printable):
+    return z3expr(self.a, printable) / z3expr(self.b, printable)
 
 ## String operations
 
@@ -480,8 +485,13 @@ class concolic_int(int):
     res = self.__v - o
     return concolic_int(sym_minus(ast(self), ast(o)), res)
 
-  ## Exercise 2: your code here.
-  ## Implement symbolic division and multiplication.
+  def __mul__(self, o):
+    res = self.__v * o
+    return concolic_int(sym_mul(ast(self), ast(o)), res)
+
+  def __div__(self, o):
+    res = self.__v / o
+    return concolic_int(sym_div(ast(self), ast(o)), res)
 
   def _sym_ast(self):
     return self.__sym
@@ -519,9 +529,13 @@ class concolic_str(str):
     res = o + self.__v
     return concolic_str(sym_concat(ast(o), ast(self)), res)
 
-  ## Exercise 4: your code here.
-  ## Implement symbolic versions of string length (override __len__)
-  ## and contains (override __contains__).
+  def __len__(self):
+    res = len(self.__v)
+    return concolic_int(sym_length(ast(self)), res)
+
+  def __contains__(self, o):
+    res = o in self.__v
+    return concolic_bool(sym_contains(ast(self), ast(o)), res)
 
   def startswith(self, o):
     res = self.__v.startswith(o)
@@ -681,42 +695,38 @@ def concolic_test(testfunc, maxiter = 100, verbose = 0):
     ## for each branch, invoke Z3 to find an input that would go
     ## the other way, and add it to the list of inputs to explore.
 
-    ## Exercise 3: your code here.
-    ##
-    ## Here's a possible plan of attack:
-    ##
-    ## - Iterate over the set of branches in cur_path_constr.
-    ##
-    ## - Compute an AST expression for the constraints necessary
-    ##   to go the other way on that branch.  You can use existing
-    ##   logical AST combinators like sym_not(), sym_and(), etc.
-    ##
-    ##   Note that some of the AST combinators take separate positional
-    ##   arguments. In Python, to unpack a list into separate positional
-    ##   arguments, use the '*' operator documented at
-    ##   https://docs.python.org/2/tutorial/controlflow.html#unpacking-argument-lists
-    ##
-    ## - If this constraint is already in the "checked" set, skip
-    ##   it (otherwise, add it to prevent further duplicates).
-    ##
-    ## - Invoke Z3, along the lines of:
-    ##
-    ##     (ok, model) = fork_and_check(constr)
-    ##
-    ## - If Z3 was able to find example inputs that go the other
-    ##   way on this branch, make a new input set containing the
-    ##   values from Z3's model, and add it to the set of inputs
-    ##   to consider:
-    ##
-    ##     inputs.add(new_values, caller)
-    ##
-    ##   where caller is the corresponding value from the list
-    ##   of call sites (cur_path_constr_callers).
-    ##
-    ##   Note that Z3 might not assign values to every variable,
-    ##   such as if that variable turns out to be irrelevant to
-    ##   the overall constraint, so be sure to preserve values
-    ##   from the initial input (concrete_values).
+    build = []
+    i = -1
+    for p in cur_path_constr:
+      i = i + 1
+
+      if i == 0:
+        left = p
+        right = sym_not(p)
+      else:
+        tohere = sym_and(*build)
+        left = sym_and(tohere, p)
+        right = sym_and(tohere, sym_not(p))
+
+      build.append(p)
+
+      if left not in checked:
+        checked.add(left)
+
+        (ok, model) = fork_and_check(left)
+        new_values = concrete_values.copy()
+        for key in model:
+          new_values[key] = model[key]
+        inputs.add(new_values, cur_path_constr_callers[i])
+
+      if right not in checked:
+        checked.add(right)
+
+        (ok, model) = fork_and_check(right)
+        new_values = concrete_values.copy()
+        for key in model:
+          new_values[key] = model[key]
+        inputs.add(new_values, cur_path_constr_callers[i])
 
   if verbose > 0:
     print 'Stopping after', iter, 'iterations'

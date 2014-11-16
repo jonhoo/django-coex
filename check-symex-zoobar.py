@@ -75,13 +75,20 @@ def test_stuff():
     for x in resp:
       print x
 
-  ## Exercise 6: your code here.
+  if pdb.query(zoobar.zoodb.Person).count() == 2:
+    balance2 = sum([p.zoobars for p in pdb.query(zoobar.zoodb.Person).all()])
+    if balance1 != balance2:
+      report_balance_mismatch()
 
-  ## Detect balance mismatch.
-  ## When detected, call report_balance_mismatch()
-
-  ## Detect zoobar theft.
-  ## When detected, call report_zoobar_theft()
+  utransfers = [t.sender for t in tdb.query(zoobar.zoodb.Transfer).all()]
+  for p in pdb.query(zoobar.zoodb.Person).all():
+    if p.username not in utransfers:
+      if p.zoobars < 10:
+        report_zoobar_theft()
+        # technically, this check could be fooled if an attacker could insert
+        # rows into the transfer db. Instead, we should keep a log of all
+        # requests, and which user the request was issued as, but this seems
+        # outside the scope of the exercise?
 
 fuzzy.concolic_test(test_stuff, maxiter=2000, verbose=1)
 
