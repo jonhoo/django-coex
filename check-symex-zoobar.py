@@ -44,16 +44,19 @@ def report_zoobar_theft():
 
 def adduser(username):
   from django.contrib.auth.models import User
+  from django.contrib.auth import authenticate
   u = User.objects.create_user(username, '', 'password')
   u.save()
+  return authenticate(username=username, password='password')
 
+# TODO(jon): This currently only test single-request actions
 def test_stuff():
   req = d.new(startresp)
 
   from django.contrib.auth.models import User
   User.objects.all().delete()
-  adduser('alice')
-  adduser('bob')
+  alice = adduser('alice')
+  bob = adduser('bob')
   balance1 = sum([u.person.zoobars for u in User.objects.all()])
 
   from zapp.models import Transfer
@@ -66,15 +69,37 @@ def test_stuff():
   ## zoobar generates around 2000 distinct paths, and that takes many
   ## minutes to check.
   path = '/trans' + fuzzy.mk_str('path')
-  if path.startswith('//'):
+  if '//' in path or '\n' in path:
     ## Don't bother trying to construct paths with lots of slashes;
     ## otherwise, the lstrip() code generates lots of paths..
     return
 
-  resp = req.get(path
-      , HTTP_COOKIE  = fuzzy.mk_str('cookie') # this probably won't work for Django
-      , HTTP_REFERER = fuzzy.mk_str('referrer') # why is this fuzzed?
-      )
+  from django.contrib.auth import login
+  from django.http import HttpRequest
+  from django.contrib.sessions.middleware import SessionMiddleware
+  user = fuzzy.mk_str('user')
+  request = HttpRequest()
+  session = SessionMiddleware()
+  session.process_request(request)
+  logged_in = False
+  if user == 'alice':
+      login(request, alice)
+      logged_in = True
+  elif user == 'bob':
+      login(request, bob)
+      logged_in = True
+
+  if logged_in:
+      from django.http import SimpleCookie
+      from django.conf import settings
+      c = SimpleCookie()
+      c[settings.SESSION_COOKIE_NAME] = request.session.session_key
+
+      resp = req.get(path
+          , HTTP_COOKIE  = c.output(header='', sep='; ')
+          )
+  else:
+      resp = req.get(path)
 
   if verbose:
     for x in resp:
