@@ -21,7 +21,8 @@ from mock import patch
 app = "zoobar"
 appviews = {
         "zapp": {
-            "index": (lambda p: p == "/")
+            "index": (lambda p: p == "/"),
+            "transfer": (lambda p: p == "/transfer/")
         },
         "zlogio": {
             "login": (lambda p: p == "/accounts/login/"),
@@ -30,7 +31,13 @@ appviews = {
         "": {}
 }
 
+st = ""
+hdrs = []
 def startresp(status, headers):
+  global st
+  global hdrs
+  st = status
+  hdrs = headers
   if verbose:
     print('startresp', status, headers)
 
@@ -119,9 +126,21 @@ def test_stuff():
           print('accessing %s anonymously' % path)
           resp = req.get(path)
 
-  if verbose:
-    for x in resp:
+  out = ""
+  for x in resp:
+    if verbose:
       print(x)
+    out += x
+
+  if logged_in and path == "/transfer/":
+      if "Log out" in out:
+          print("login works. that's nice.")
+      else:
+          print("login doesn't work :(\ngot %d of output:" % len(out))
+          global st, hdrs
+          print(st)
+          print(hdrs)
+          print(out)
 
   if User.objects.all().count() == 2:
     balance2 = sum([u.person.zoobars for u in User.objects.all()])
