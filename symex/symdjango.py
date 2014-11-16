@@ -10,7 +10,7 @@ from mock import patch
 import importlib
 
 # use our Django (currently irrelevant)
-ourdjango = os.path.dirname(os.path.abspath(__file__)) + '/../django-concolic'
+ourdjango = os.path.dirname(os.path.abspath(__file__)) + '/../../django-concolic'
 if ourdjango not in sys.path:
     sys.path.insert(1, ourdjango)
 
@@ -28,7 +28,7 @@ class SymDjango():
 
         # Make sure Django reads the correct settings
         os.environ.update({
-            "DJANGO_SETTINGS_MODULE": "app." + app + ".settings"
+            "DJANGO_SETTINGS_MODULE": app + ".settings"
         })
 
     def new(self, response_handler):

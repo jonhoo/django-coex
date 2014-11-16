@@ -2,10 +2,10 @@
 ## symbolic / concolic execution.
 
 import fuzzy
-import sqlalchemy.orm
+#import sqlalchemy.orm
 
-oldget = sqlalchemy.orm.query.Query.get
-def newget(query, primary_key):
+#oldget = sqlalchemy.orm.query.Query.get
+#def newget(query, primary_key):
   ## Exercise 5: your code here.
   ##
   ## Find the object with the primary key "primary_key" in SQLalchemy
@@ -13,6 +13,6 @@ def newget(query, primary_key):
   ##
   ## Hint: given a SQLalchemy row object r, you can find the name of
   ## its primary key using r.__table__.primary_key.columns.keys()[0]
-  return None
+#  return None
 
-sqlalchemy.orm.query.Query.get = newget
+#sqlalchemy.orm.query.Query.get = newget
