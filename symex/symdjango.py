@@ -4,7 +4,7 @@ import sys
 import os
 
 # patch Django where needed
-from unittest.mock import patch
+from mock import patch
 
 # Dynamic imports
 import importlib
