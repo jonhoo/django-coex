@@ -36,16 +36,16 @@ class SymDjango():
 
 class SymRequestFactory(RequestFactory):
     def __init__(self, symdjango, start_response, **defaults):
+        from django.core.servers.basehttp import get_internal_wsgi_application
         self.symdjango = symdjango
         self.start_response = start_response
+        self.handler = get_internal_wsgi_application()
         RequestFactory.__init__(self, *defaults)
 
     def request(self, **request):
-        from django.core.servers.basehttp import get_internal_wsgi_application
-        handler = get_internal_wsgi_application()
         with patch('django.core.urlresolvers.RegexURLResolver', new=SymResolver) as urlmock:
             urlmock.symdjango = self.symdjango
-            return handler(self._base_environ(**request), self.start_response)
+            return self.handler(self._base_environ(**request), self.start_response)
 
 class SymResolver():
     symdjango = None
