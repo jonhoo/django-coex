@@ -15,6 +15,9 @@ from symex.symdjango import SymDjango
 import symex.symsql
 import symex.symeval
 
+# to patch urlparse
+from mock import patch
+
 app = "zoobar"
 appviews = {
         "zapp": {
@@ -83,23 +86,37 @@ def test_stuff():
   session.process_request(request)
   logged_in = False
   if user == 'alice':
+      print('accessing %s as alice' % path)
       login(request, alice)
       logged_in = True
   elif user == 'bob':
+      print('accessing %s as bob' % path)
       login(request, bob)
       logged_in = True
 
-  if logged_in:
-      from django.http import SimpleCookie
-      from django.conf import settings
-      c = SimpleCookie()
-      c[settings.SESSION_COOKIE_NAME] = request.session.session_key
+  from urlparse import ParseResult
+  with patch('django.test.client.urlparse') as mock:
+      mock.return_value = ParseResult(
+              scheme = 'http',
+              netloc = 'testserver',
+              path = path,
+              params = '',
+              query = '',
+              fragment = ''
+              )
 
-      resp = req.get(path
-          , HTTP_COOKIE  = c.output(header='', sep='; ')
-          )
-  else:
-      resp = req.get(path)
+      if logged_in:
+          from django.http import SimpleCookie
+          from django.conf import settings
+          c = SimpleCookie()
+          c[settings.SESSION_COOKIE_NAME] = request.session.session_key
+
+          resp = req.get(path
+              , HTTP_COOKIE  = c.output(header='', sep='; ')
+              )
+      else:
+          print('accessing %s anonymously' % path)
+          resp = req.get(path)
 
   if verbose:
     for x in resp:
