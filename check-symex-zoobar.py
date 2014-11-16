@@ -80,15 +80,15 @@ def test_stuff():
     for x in resp:
       print(x)
 
-  if pdb.query(zoobar.zoodb.Person).count() == 2:
-    balance2 = sum([p.zoobars for p in pdb.query(zoobar.zoodb.Person).all()])
+  if User.objects.all().count() == 2:
+    balance2 = sum([u.person.zoobars for u in User.objects.all()])
     if balance1 != balance2:
       report_balance_mismatch()
 
-  utransfers = [t.sender for t in tdb.query(zoobar.zoodb.Transfer).all()]
-  for p in pdb.query(zoobar.zoodb.Person).all():
+  utransfers = [t.sender.user.username for t in Transfer.objects.all()]
+  for p in User.objects.all():
     if p.username not in utransfers:
-      if p.zoobars < 10:
+      if p.person.zoobars < 10:
         report_zoobar_theft()
         # technically, this check could be fooled if an attacker could insert
         # rows into the transfer db. Instead, we should keep a log of all
