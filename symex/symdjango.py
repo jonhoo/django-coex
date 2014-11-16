@@ -57,7 +57,6 @@ class SymResolver():
 
     def resolve(self, path):
         from django.core.urlresolvers import Resolver404
-        print("resolving path '%s'" % path)
         for m in SymResolver.symdjango.viewmap:
             for v in SymResolver.symdjango.viewmap[m]:
                 s = SymURL(SymResolver.symdjango, m, v)
