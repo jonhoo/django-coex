@@ -1,6 +1,6 @@
 #!/usr/bin/env python2
 
-verbose = True
+verbose = False
 
 import os
 import symex.fuzzy as fuzzy
