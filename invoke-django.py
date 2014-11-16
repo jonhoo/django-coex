@@ -11,19 +11,8 @@ appviews = {
         "zlogio": {
             "login": (lambda p: p == "/accounts/login/"),
             "logout": (lambda p: p == "/accounts/logout/"),
-            }
-
-        }
-
-# reverse lookup; module.routename => path (given args + kwargs)
-reverse = {
-        "zapp": {
-            "index": (lambda: "/")
         },
-        "": {
-            "login": (lambda: "/accounts/login/"),
-            "logout": (lambda: "/accounts/logout/")
-        },
+        "": {}
 }
 
 import sys
@@ -98,14 +87,7 @@ class SymResolver():
         raise Resolver404({'path': path})
 
     def _reverse_with_prefix(self, v, _prefix, *args, **kwargs):
-        global reverse
-
-        print("looking up reverse for '%s' in '%s'" % (v, self.mod))
-        if v in reverse[self.mod]:
-            return reverse[self.mod][v](*args, **kwargs)
-
-        raise NoReverseMatch("Reverse for '%s' in '%s' with arguments '%s' and keyword "
-                "arguments '%s' not found." % (v, self.mod, args, kwargs))
+        return "/"
 
     @property
     def namespace_dict(self):
@@ -117,7 +99,7 @@ class SymResolver():
         return {}
 
 reverseDict = {}
-for m in reverse:
+for m in appviews:
     s = SymResolver("", None)
     s.setMod(m)
     reverseDict[m] = ("", s)
