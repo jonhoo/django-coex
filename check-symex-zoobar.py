@@ -75,6 +75,10 @@ def adduser(username):
 
 # TODO(jon): This currently only test single-request actions
 def test_stuff():
+  method = fuzzy.mk_str('method')
+  if not method == 'get' and not method == 'post':
+    return
+
   req = d.new(startresp)
 
   from django.contrib.auth.models import User
@@ -95,6 +99,14 @@ def test_stuff():
   path = fuzzy.mk_str('path') + '/'
   if path[0] == '/':
     return
+
+  data = {}
+  if method == 'post':
+    if path == 'transfer/':
+      data = {
+        'zoobars': fuzzy.mk_int('transfer.zoobars'),
+        'recipient': fuzzy.mk_str('transfer.recipient')
+      }
 
   logged_in = False
   from urlparse import ParseResult
@@ -145,11 +157,21 @@ def test_stuff():
           })
 
           logged_in = True
-          resp = req.get(path, HTTP_COOKIE=c.output(header='', sep='; '))
+          if method == 'get':
+            resp = req.get(path, HTTP_COOKIE=c.output(header='', sep='; '))
+          elif method == 'post':
+            resp = req.post(path
+                , HTTP_COOKIE=c.output(header='', sep='; ')
+                , data=data
+                )
       else:
           if verbose > 0:
             print('==> accessing %s anonymously' % path)
-          resp = req.get(path)
+
+          if method == 'get':
+            resp = req.get(path)
+          elif method == 'post':
+            resp = req.post(path, data=data)
 
   out = ""
   for x in resp:
@@ -162,6 +184,14 @@ def test_stuff():
           print(" -> login works. that's nice.")
       else:
           print(" -> login doesn't work :(")
+
+      if method == "post":
+        if "warning" in out:
+          # success is also notified using a warning span
+          wtext = re.search('<span class="warning">([^<]*)</span>', out).group(1)
+          print(" -> transfer warning: %s" % wtext)
+        else:
+          print(" -> NO TRANSFER WARNING?!")
 
   if User.objects.all().count() == 2:
     balance2 = sum([u.person.zoobars for u in User.objects.all()])
