@@ -67,7 +67,7 @@ class SymResolver():
         raise Resolver404({'path': path})
 
     def _reverse_with_prefix(self, v, _prefix, *args, **kwargs):
-        return "/ignoring-reverse-urls"
+        return "<reverse: %s>" % v
 
     @property
     def namespace_dict(self):
