@@ -682,7 +682,7 @@ def concolic_test(testfunc, maxiter = 100, verbose = 0):
     cur_path_constr_callers = []
 
     if verbose > 0:
-      print 'Trying concrete values:', concrete_values
+      print 'Trying concrete values:', ["%s = %s" % (k, concrete_values[k]) for k in concrete_values if not k.startswith('_t_')]
 
     try:
       testfunc()
