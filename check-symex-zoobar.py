@@ -181,6 +181,9 @@ def test_stuff():
           print(" -> transfer warning: %s" % wtext)
         else:
           print(" -> NO TRANSFER WARNING?!")
+          print(80 * "-")
+          print(re.sub("^", "\t", out))
+          print(80 * "-")
 
   if User.objects.all().count() == 2:
     balance2 = sum([u.person.zoobars for u in User.objects.all()])
