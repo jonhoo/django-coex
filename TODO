@@ -1,0 +1,9 @@
+Override __builtin__.int to provide similar functionality as symint to prevent
+any changes at all necessary to Zoobar application?
+
+Avoid double-trying inputs (KLEE inspired)
+
+try/catch around app.run to check assertions never fail
+
+symeval => symbuiltin
+  - symint => int
