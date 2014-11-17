@@ -17,7 +17,7 @@ import symex.rewriter as rewriter
 
 importwrapper.rewrite_imports(rewriter.rewriter)
 
-from symex.symdjango import SymDjango
+from symex.symdjango import SymDjango, post_data
 import symex.symsql
 import symex.symeval
 
@@ -99,10 +99,10 @@ def test_stuff():
   data = {}
   if method == 'post':
     if path == 'transfer/':
-      data = {
-        'zoobars': fuzzy.mk_int('transfer.zoobars'),
-        'recipient': fuzzy.mk_str('transfer.recipient')
-      }
+      data = post_data(
+        zoobars = fuzzy.mk_int('transfer.zoobars'),
+        recipient = fuzzy.mk_str('transfer.recipient')
+      )
 
   logged_in = False
   user = fuzzy.mk_str('user')

@@ -27,6 +27,46 @@ patcher = patch('django.utils.encoding.force_bytes', new_callable=NewForceBytes)
 patcher.start()
 patcher = patch('django.test.client.force_bytes', new_callable=NewForceBytes)
 patcher.start()
+# END
+
+# Preserve symbolic values across POST data serialization (gah..)
+# First, we do a bit of a trick when asked to create POST data by replacing
+# concolic variables with a tagged key containing the symbolic identifier of
+# the variable instead.
+def post_data(**kwargs):
+  data = {}
+
+  tagged_key = lambda k: 'CoNcOlIc::' + type(k).__name__ + ':' + k._sym_ast().id
+  for k in kwargs:
+    v = kwargs[k]
+    if type(v).__name__ in ("concolic_str", "concolic_int"):
+      v = tagged_key(v)
+    data[k] = v
+  return data
+# Then, we wrap django.http.MultiPartParser.parse so that it restores symbolic
+# nature of tagged parts (look through self._post, first returned value).
+from django.http.request import MultiPartParser
+from django.http import QueryDict
+class MPP(MultiPartParser):
+  def parse(self):
+    post, files = super(MPP, self).parse()
+    newpost = QueryDict('', mutable=True)
+    for k, vs in post.iterlists():
+      if len(vs) == 1 and vs[0].startswith('CoNcOlIc::'):
+        v = vs[0][len('CoNcOlIc::'):]
+        ts = v.split(':', 2)
+        if ts[0] == "concolic_int":
+          vs = [fuzzy.mk_int(ts[1])]
+        elif ts[0] == "concolic_str":
+          vs = [fuzzy.mk_str(ts[1])]
+        else:
+          print("UNKNOWN CONCOLIC TYPE %s" % ts[0])
+      newpost.setlist(k, vs)
+    return newpost, files
+
+patcher = patch('django.http.request.MultiPartParser', new=MPP)
+patcher.start()
+# END
 
 # Mock DB queries so they play nicely with concolic execution
 import django.db.models.query
