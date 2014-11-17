@@ -160,9 +160,12 @@ def test_stuff():
 
   out = ""
   for x in resp:
-    if verbose > 2:
-      print(x)
     out += x
+
+  if verbose > 2:
+    print(80 * "-")
+    print(re.sub("^", "\t", out))
+    print(80 * "-")
 
   if logged_in and path == "transfer/":
       if "Log out" in out:
