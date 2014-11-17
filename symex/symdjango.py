@@ -28,6 +28,46 @@ patcher.start()
 patcher = patch('django.test.client.force_bytes', new_callable=NewForceBytes)
 patcher.start()
 
+# Mock DB queries so they play nicely with concolic execution
+import django.db.models.query
+
+notdict = {}
+oldget = django.db.models.QuerySet.get
+def newget(self, *args, **kwargs):
+  import django.contrib.sessions.models
+  if self.model is not django.contrib.sessions.models.Session:
+    if len(kwargs) == 1:
+      key = kwargs.keys()[0]
+      if '_' not in key:
+        if key == 'pk':
+          key = self.model._meta.pk.name
+          kwargs[key] = kwargs['pk']
+          del kwargs['pk']
+
+        for m in self.model.objects.all():
+          if getattr(m, key) == kwargs[key]:
+            real = oldget(self, *args, **kwargs)
+            assert m == real
+            return m
+
+        # this should raise an exception, or we've done something wrong
+        oldget(self, *args, **kwargs)
+        assert False
+      else:
+        e = "newget: special keys like %s not yet supported" % key
+        if e not in notdict:
+          print(e)
+        notdict[e] = True
+    else:
+      e = "newget: multi-key lookups not yet supported: %s" % kwargs
+      if e not in notdict:
+        print(e)
+      notdict[e] = True
+  return oldget(self, *args, **kwargs)
+
+django.db.models.QuerySet.get = newget
+
+# Mock requests by mocking routing + url parsing
 from django.test.client import RequestFactory
 
 # It's only safe to use SymDjango as a singleton!
