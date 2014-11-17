@@ -90,7 +90,6 @@ class SymURL():
     def resolve(self, path):
         from django.core.urlresolvers import ResolverMatch
         if self.callback(path):
-            print("%s matches against %s.%s" % (path, self.mod, self.view))
             kwargs = {
                     # named groups in url
                     }

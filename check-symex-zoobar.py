@@ -1,8 +1,14 @@
 #!/usr/bin/env python2
 
-verbose = False
+# Verbosity of output
+# 0 = errors and test results only
+# 1 = access log, response status, concrete values
+# 2 = branch conditions, response headers
+# 3 = branch stacks, response bodies
+verbose = 1
 
 import os
+import re
 import symex.fuzzy as fuzzy
 import __builtin__
 import inspect
@@ -22,11 +28,11 @@ app = "zoobar"
 appviews = {
         "zapp": {
             "index": (lambda p: p == "/"),
-            "transfer": (lambda p: p == "/transfer/")
+            "transfer": (lambda p: p == "transfer/")
         },
         "zlogio": {
-            "login": (lambda p: p == "/accounts/login/"),
-            "logout": (lambda p: p == "/accounts/logout/"),
+            "login": (lambda p: p == "accounts/login/"),
+            "logout": (lambda p: p == "accounts/logout/"),
         },
         "": {}
 }
@@ -38,8 +44,12 @@ def startresp(status, headers):
   global hdrs
   st = status
   hdrs = headers
-  if verbose:
-    print('startresp', status, headers)
+  if verbose == 1 and st == '404 NOT FOUND':
+    print(" -> 404 not found...")
+  elif verbose == 1:
+    print(' -> %s' % status)
+  elif verbose > 1:
+    print(' -> %s\n -> %s' % (status, headers))
 
 d = SymDjango(app, os.path.abspath(os.path.dirname(__file__) + '/app'), appviews)
 
@@ -58,7 +68,10 @@ def adduser(username):
   from django.contrib.auth import authenticate
   u = User.objects.create_user(username, '', 'password')
   u.save()
-  return authenticate(username=username, password='password')
+  u = authenticate(username=username, password='password')
+  if not u or not u.is_active:
+    print(" -> failed to authenticate user")
+  return u
 
 # TODO(jon): This currently only test single-request actions
 def test_stuff():
@@ -79,29 +92,11 @@ def test_stuff():
   ## concolic values for both REQUEST_METHOD and PATH_INFO, but then
   ## zoobar generates around 2000 distinct paths, and that takes many
   ## minutes to check.
-  path = '/trans' + fuzzy.mk_str('path')
-  if '//' in path or '\n' in path:
-    ## Don't bother trying to construct paths with lots of slashes;
-    ## otherwise, the lstrip() code generates lots of paths..
+  path = fuzzy.mk_str('path') + '/'
+  if path[0] == '/':
     return
 
-  from django.contrib.auth import login
-  from django.http import HttpRequest
-  from django.contrib.sessions.middleware import SessionMiddleware
-  user = fuzzy.mk_str('user')
-  request = HttpRequest()
-  session = SessionMiddleware()
-  session.process_request(request)
   logged_in = False
-  if user == 'alice':
-      print('accessing %s as alice' % path)
-      login(request, alice)
-      logged_in = True
-  elif user == 'bob':
-      print('accessing %s as bob' % path)
-      login(request, bob)
-      logged_in = True
-
   from urlparse import ParseResult
   with patch('django.test.client.urlparse') as mock:
       mock.return_value = ParseResult(
@@ -113,34 +108,60 @@ def test_stuff():
               fragment = ''
               )
 
-      if logged_in:
-          from django.http import SimpleCookie
+      user = fuzzy.mk_str('user')
+      if user == 'alice' or user == 'bob':
+          from django.apps import apps
+          if not apps.is_installed("django.contrib.sessions"):
+            print(" -> application under test does not support sessions")
+            return
+
+          if verbose > 0:
+            print('==> accessing %s as %s' % (path, user))
+
+          # Fake a HTTPRequest for getting the login cookie
+          from django.http import HttpRequest
+          from importlib import import_module
           from django.conf import settings
+          engine = import_module(settings.SESSION_ENGINE)
+          request = HttpRequest()
+          request.session = engine.SessionStore()
+
+          from django.contrib.auth import login
+          if user == 'alice':
+              login(request, alice)
+          elif user == 'bob':
+              login(request, bob)
+          request.session.save()
+
+          from django.http import SimpleCookie
           c = SimpleCookie()
           c[settings.SESSION_COOKIE_NAME] = request.session.session_key
+          c[settings.SESSION_COOKIE_NAME].update({
+            'max-age': None,
+            'path': '/',
+            'domain': settings.SESSION_COOKIE_DOMAIN,
+            'secure': None,
+            'expires': None
+          })
 
-          resp = req.get(path
-              , HTTP_COOKIE  = c.output(header='', sep='; ')
-              )
+          logged_in = True
+          resp = req.get(path, HTTP_COOKIE=c.output(header='', sep='; '))
       else:
-          print('accessing %s anonymously' % path)
+          if verbose > 0:
+            print('==> accessing %s anonymously' % path)
           resp = req.get(path)
 
   out = ""
   for x in resp:
-    if verbose:
+    if verbose > 2:
       print(x)
     out += x
 
-  if logged_in and path == "/transfer/":
+  if logged_in and path == "transfer/":
       if "Log out" in out:
-          print("login works. that's nice.")
+          print(" -> login works. that's nice.")
       else:
-          print("login doesn't work :(\ngot %d of output:" % len(out))
-          global st, hdrs
-          print(st)
-          print(hdrs)
-          print(out)
+          print(" -> login doesn't work :(")
 
   if User.objects.all().count() == 2:
     balance2 = sum([u.person.zoobars for u in User.objects.all()])
@@ -165,4 +186,4 @@ class NewForceBytes():
 
 with patch('django.utils.encoding.force_bytes', new_callable=NewForceBytes) as bmock:
     with patch('django.test.client.force_bytes', new_callable=NewForceBytes) as bmock:
-        fuzzy.concolic_test(test_stuff, maxiter=2000, verbose=0)
+        fuzzy.concolic_test(test_stuff, maxiter=2000, verbose=verbose)
