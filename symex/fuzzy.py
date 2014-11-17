@@ -373,8 +373,8 @@ def uniqname(id):
 
 ## Helper for printing Z3-indented expressions
 
-def indent(s, spaces = '  '):
-  return spaces + str(s).replace('\n', '\n' + spaces)
+def indent(s, spaces = '\t'):
+  return spaces + str(s).replace('\n', ' ')
 
 ## Support for forking because z3str uses lots of global variables
 
