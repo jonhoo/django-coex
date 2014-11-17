@@ -2,6 +2,7 @@
 
 import sys
 import os
+import fuzzy
 
 # patch Django where needed
 from mock import patch
@@ -13,6 +14,19 @@ import importlib
 ourdjango = os.path.dirname(os.path.abspath(__file__)) + '/../../django-concolic'
 if ourdjango not in sys.path:
     sys.path.insert(1, ourdjango)
+
+# Mock out force_str and relatives
+from django.utils.encoding import force_bytes
+class NewForceBytes():
+    def __call__(self, s, *args, **kwargs):
+        if isinstance(s, fuzzy.concolic_str):
+            return s
+        return force_bytes(s, *args, **kwargs)
+
+patcher = patch('django.utils.encoding.force_bytes', new_callable=NewForceBytes)
+patcher.start()
+patcher = patch('django.test.client.force_bytes', new_callable=NewForceBytes)
+patcher.start()
 
 from django.test.client import RequestFactory
 
@@ -32,7 +46,10 @@ class SymDjango():
         })
 
     def new(self, response_handler):
-        return SymRequestFactory(self, response_handler)
+        return SymRequestFactory(self
+            , response_handler
+            , SERVER_NAME = 'concolic.io'
+            )
 
 class SymRequestFactory(RequestFactory):
     def __init__(self, symdjango, start_response, **defaults):
@@ -40,12 +57,32 @@ class SymRequestFactory(RequestFactory):
         self.symdjango = symdjango
         self.start_response = start_response
         self.handler = get_internal_wsgi_application()
-        RequestFactory.__init__(self, *defaults)
+        RequestFactory.__init__(self, **defaults)
 
     def request(self, **request):
-        with patch('django.core.urlresolvers.RegexURLResolver', new=SymResolver) as urlmock:
-            urlmock.symdjango = self.symdjango
-            return self.handler(self._base_environ(**request), self.start_response)
+      environ = self._base_environ(**request)
+      with patch('django.core.urlresolvers.RegexURLResolver', new=SymResolver) as mock:
+        mock.symdjango = self.symdjango
+        res = self.handler(environ, self.start_response)
+      return res
+
+    def generic(self, method, path, data='',
+        content_type='application/octet-stream', secure=False, **extra):
+      environ = self._base_environ(PATH_INFO=path, **extra)
+
+      from urlparse import ParseResult
+      with patch('django.test.client.urlparse') as mock:
+        mock.return_value = ParseResult(
+                scheme = environ['wsgi.url_scheme'],
+                netloc = environ['SERVER_NAME'],
+                path = environ['PATH_INFO'],
+                params = '',
+                query = 'QUERY_STRING' in environ and environ['QUERY_STRING'] or '',
+                fragment = ''
+                )
+        res = super(SymRequestFactory, self).generic(method, path, data,
+            content_type=content_type, secure=secure, **extra)
+      return res
 
 class SymResolver():
     symdjango = None

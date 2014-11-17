@@ -21,9 +21,6 @@ from symex.symdjango import SymDjango
 import symex.symsql
 import symex.symeval
 
-# to patch urlparse
-from mock import patch
-
 app = "zoobar"
 appviews = {
         "zapp": {
@@ -55,7 +52,6 @@ d = SymDjango(app, os.path.abspath(os.path.dirname(__file__) + '/app'), appviews
 
 # Only safe to load now that it's been patched and added to import path
 import zoobar
-from django.utils.encoding import force_bytes
 
 def report_balance_mismatch():
   print("WARNING: Balance mismatch detected")
@@ -109,69 +105,58 @@ def test_stuff():
       }
 
   logged_in = False
-  from urlparse import ParseResult
-  with patch('django.test.client.urlparse') as mock:
-      mock.return_value = ParseResult(
-              scheme = 'http',
-              netloc = 'testserver',
-              path = path,
-              params = '',
-              query = '',
-              fragment = ''
-              )
+  user = fuzzy.mk_str('user')
+  if user == 'alice' or user == 'bob':
+      from django.apps import apps
+      if not apps.is_installed("django.contrib.sessions"):
+        print(" -> application under test does not support sessions")
+        return
 
-      user = fuzzy.mk_str('user')
-      if user == 'alice' or user == 'bob':
-          from django.apps import apps
-          if not apps.is_installed("django.contrib.sessions"):
-            print(" -> application under test does not support sessions")
-            return
+      if verbose > 0:
+        print('==> accessing %s as %s' % (path, user))
 
-          if verbose > 0:
-            print('==> accessing %s as %s' % (path, user))
+      # Fake a HTTPRequest for getting the login cookie
+      from django.http import HttpRequest
+      from importlib import import_module
+      from django.conf import settings
+      engine = import_module(settings.SESSION_ENGINE)
+      request = HttpRequest()
+      request.session = engine.SessionStore()
 
-          # Fake a HTTPRequest for getting the login cookie
-          from django.http import HttpRequest
-          from importlib import import_module
-          from django.conf import settings
-          engine = import_module(settings.SESSION_ENGINE)
-          request = HttpRequest()
-          request.session = engine.SessionStore()
+      from django.contrib.auth import login
+      if user == 'alice':
+          login(request, alice)
+      elif user == 'bob':
+          login(request, bob)
+      request.session.save()
 
-          from django.contrib.auth import login
-          if user == 'alice':
-              login(request, alice)
-          elif user == 'bob':
-              login(request, bob)
-          request.session.save()
+      from django.http import SimpleCookie
+      c = SimpleCookie()
+      c[settings.SESSION_COOKIE_NAME] = request.session.session_key
+      c[settings.SESSION_COOKIE_NAME].update({
+        'max-age': None,
+        'path': '/',
+        'domain': settings.SESSION_COOKIE_DOMAIN,
+        'secure': None,
+        'expires': None
+      })
 
-          from django.http import SimpleCookie
-          c = SimpleCookie()
-          c[settings.SESSION_COOKIE_NAME] = request.session.session_key
-          c[settings.SESSION_COOKIE_NAME].update({
-            'max-age': None,
-            'path': '/',
-            'domain': settings.SESSION_COOKIE_DOMAIN,
-            'secure': None,
-            'expires': None
-          })
+      logged_in = True
+      if method == 'get':
+        resp = req.get(path, HTTP_COOKIE=c.output(header='', sep='; '))
+      elif method == 'post':
+        resp = req.post(path
+            , HTTP_COOKIE=c.output(header='', sep='; ')
+            , data=data
+            )
+  else:
+      if verbose > 0:
+        print('==> accessing %s anonymously' % path)
 
-          logged_in = True
-          if method == 'get':
-            resp = req.get(path, HTTP_COOKIE=c.output(header='', sep='; '))
-          elif method == 'post':
-            resp = req.post(path
-                , HTTP_COOKIE=c.output(header='', sep='; ')
-                , data=data
-                )
-      else:
-          if verbose > 0:
-            print('==> accessing %s anonymously' % path)
-
-          if method == 'get':
-            resp = req.get(path)
-          elif method == 'post':
-            resp = req.post(path, data=data)
+      if method == 'get':
+        resp = req.get(path)
+      elif method == 'post':
+        resp = req.post(path, data=data)
 
   out = ""
   for x in resp:
@@ -208,12 +193,4 @@ def test_stuff():
         # requests, and which user the request was issued as, but this seems
         # outside the scope of the exercise?
 
-class NewForceBytes():
-    def __call__(self, s, *args, **kwargs):
-        if isinstance(s, fuzzy.concolic_str):
-            return s
-        return force_bytes(s, *args, **kwargs)
-
-with patch('django.utils.encoding.force_bytes', new_callable=NewForceBytes) as bmock:
-    with patch('django.test.client.force_bytes', new_callable=NewForceBytes) as bmock:
-        fuzzy.concolic_test(test_stuff, maxiter=2000, verbose=verbose)
+fuzzy.concolic_test(test_stuff, maxiter=2000, verbose=verbose)
