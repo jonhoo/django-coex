@@ -21,6 +21,8 @@ class NewForceBytes():
     def __call__(self, s, *args, **kwargs):
         if isinstance(s, fuzzy.concolic_str):
             return s
+        if isinstance(s, fuzzy.concolic_int):
+            return s
         return force_bytes(s, *args, **kwargs)
 
 patcher = patch('django.utils.encoding.force_bytes', new_callable=NewForceBytes)
@@ -65,6 +67,19 @@ class MPP(MultiPartParser):
     return newpost, files
 
 patcher = patch('django.http.request.MultiPartParser', new=MPP)
+patcher.start()
+# There's also another type forcing happening in QueryDict that we need to
+# override
+from django.http.request import bytes_to_text
+class NewBytes2Text():
+  def __call__(self, s, encoding):
+        if isinstance(s, fuzzy.concolic_str):
+            return s
+        if isinstance(s, fuzzy.concolic_int):
+            return s
+        return bytes_to_text(s, encoding)
+
+patcher = patch('django.http.request.bytes_to_text', new_callable=NewBytes2Text)
 patcher.start()
 # END
 
