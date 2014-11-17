@@ -43,6 +43,8 @@ def myeval(expr, globals = None, locals = None):
 __builtin__.eval = myeval
 
 def symint(x, base = 10):
+  if isinstance(x, fuzzy.concolic_int):
+    return x
   if base == 10 and isinstance(x, fuzzy.concolic_str):
     i = str_to_small_int(x)
     if i is not None:

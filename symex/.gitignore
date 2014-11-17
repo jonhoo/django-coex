@@ -2,3 +2,5 @@ libz3str.so
 byteplay-upstream.py
 byteplay.py
 z3str.py
+*.pyc
+/__pycache__
