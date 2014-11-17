@@ -162,7 +162,8 @@ def test_stuff():
   for x in resp:
     out += x
 
-  if verbose > 2:
+  global st
+  if verbose > 2 or st == "500 INTERNAL SERVER ERROR":
     print(80 * "-")
     print(re.sub("^", "\t", out))
     print(80 * "-")
