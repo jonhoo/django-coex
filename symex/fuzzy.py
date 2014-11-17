@@ -334,6 +334,7 @@ cur_path_constr_callers = None
 
 def get_caller():
   frame = inspect.currentframe()
+  back = []
   try:
     while True:
       info = inspect.getframeinfo(frame)
@@ -341,10 +342,11 @@ def get_caller():
       ## as well as in the rewritten replacements of dict, %, etc.
       if not info.filename.endswith('fuzzy.py') and\
          not info.filename.endswith('rewriter.py'):
-        return (info.filename, info.lineno)
+        back.append((info.filename, info.lineno))
       frame = frame.f_back
   finally:
     del frame
+    return back
 
 def add_constr(e):
   global cur_path_constr, cur_path_constr_callers
@@ -640,8 +642,8 @@ class InputQueue(object):
     return values
 
   def add(self, new_values, caller):
-    prio = self.branchcount[caller]
-    self.branchcount[caller] += 1
+    prio = self.branchcount[caller[0]]
+    self.branchcount[caller[0]] += 1
     self.inputs.put((prio, new_values))
 
 ## Actual concolic execution API
@@ -690,7 +692,12 @@ def concolic_test(testfunc, maxiter = 100, verbose = 0):
     if verbose > 1:
       print 'Test generated', len(cur_path_constr), 'branches:'
       for (c, caller) in zip(cur_path_constr, cur_path_constr_callers):
-        print indent(z3expr(c, True)), '@', '%s:%d' % (caller[0], caller[1])
+        if verbose > 2:
+          print indent(z3expr(c, True)), '@'
+          for c in caller:
+            print indent(indent('%s:%d' % (c[0], c[1])))
+        else:
+          print indent(z3expr(c, True)), '@', '%s:%d' % (caller[0][0], caller[0][1])
 
     ## for each branch, invoke Z3 to find an input that would go
     ## the other way, and add it to the list of inputs to explore.
