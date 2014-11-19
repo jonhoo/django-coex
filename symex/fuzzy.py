@@ -443,9 +443,9 @@ def concolic_bool(sym, v):
   add_constr(sym_eq(sym, ast(v)))
   return v
 
-class concolic_int(int):
+class concolic_int_act(int):
   def __new__(cls, sym, v):
-    self = super(concolic_int, cls).__new__(cls, v)
+    self = super(concolic_int_act, cls).__new__(cls, v)
     self.__v = v
     self.__sym = sym
     return self
@@ -498,10 +498,35 @@ class concolic_int(int):
   def _sym_ast(self):
     return self.__sym
 
-class concolic_str(str):
+def implementedInt(name):
+  if (name == "_concolic_int_act__v" or
+      name == "_concolic_int_act__sym" or
+      name == "__class__" or
+      name == "__new__" or
+      name == "__eq__" or
+      name == "__ne__" or
+      name == "__cmp__" or
+      name == "__add__" or
+      name == "__radd__" or
+      name == "__sub__" or
+      name == "__mul__h" or
+      name == "__div__" or
+      name == "_sym_ast" ):
+    return True
+  else :
+    return False
+
+class concolic_int(concolic_int_act):
+  def __getattribute__(self, name):
+    if (not implementedInt(name)):
+      print "Concolic int was called on method " + name
+    return concolic_int_act.__getattribute__(self, name)
+
+
+class concolic_str_act(str):
   def __new__(cls, sym, v):
     assert type(v) == str or type(v) == unicode
-    self = super(concolic_str, cls).__new__(cls, v)
+    self = super(concolic_str_act, cls).__new__(cls, v)
     self.__v = v
     self.__sym = sym
     return self
@@ -606,6 +631,40 @@ class concolic_str(str):
 
   def _sym_ast(self):
     return self.__sym
+
+def implementedStr(name):
+  if (name == "_concolic_str_act__v" or
+      name == "_concolic_str_act__sym" or
+      name == "__class__" or
+      name == "__new__" or
+      name == "__eq__" or
+      name == "__ne__" or
+      name == "__add__" or
+      name == "__radd__" or
+      name == "__len__" or
+      name == "__contains__" or
+      name == "startswith" or 
+      name == "endswith" or
+      name == "__getiem__" or
+      name == "__getslice__" or
+      name == "find" or
+      name == "decode" or # Hacked above
+      name == "encode" or # Hacked above     
+      name == "__unicode__" or # Hacked above
+      name == "lstrip" or
+      name == "rstrip" or
+      name == "upper" or
+      name == "_sym_ast" ):
+    return True
+  else :
+    return False
+
+class concolic_str(concolic_str_act):
+  def __getattribute__(self, name):
+    if (not implementedStr(name)):
+      print "Concolic str was called on method " + name
+    return concolic_str_act.__getattribute__(self, name)
+
 
 ## Override some builtins..
 
