@@ -85,6 +85,7 @@ patcher.start()
 
 # Mock DB queries so they play nicely with concolic execution
 import django.db.models.query
+from django.db.models import Model
 
 notdict = {}
 oldget = django.db.models.QuerySet.get
@@ -100,7 +101,13 @@ def newget(self, *args, **kwargs):
           del kwargs['pk']
 
         for m in self.model.objects.all():
-          if getattr(m, key) == kwargs[key]:
+          v = kwargs[key]
+
+          # support model attribute passthrough
+          if isinstance(v, Model) and hasattr(v, key):
+            v = getattr(v, key)
+
+          if getattr(m, key) == v:
             real = oldget(self, *args, **kwargs)
             assert m == real
             return m
