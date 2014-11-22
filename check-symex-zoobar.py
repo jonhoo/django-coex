@@ -25,6 +25,7 @@ app = "zoobar"
 appviews = {
         "zapp": {
             "index": (lambda p: p == "/"),
+            "users": (lambda p: p == "users/"),
             "transfer": (lambda p: p == "transfer/")
         },
         "zlogio": {
