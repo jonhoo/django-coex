@@ -34,20 +34,6 @@ appviews = {
         "": {}
 }
 
-st = ""
-hdrs = []
-def startresp(status, headers):
-  global st
-  global hdrs
-  st = status
-  hdrs = headers
-  if verbose == 1 and st == '404 NOT FOUND':
-    print(" -> 404 not found...")
-  elif verbose == 1:
-    print(' -> %s' % status)
-  elif verbose > 1:
-    print(' -> %s\n -> %s' % (status, headers))
-
 d = SymDjango(app, os.path.abspath(os.path.dirname(__file__) + '/app'), appviews)
 
 # Only safe to load now that it's been patched and added to import path
@@ -64,9 +50,6 @@ def adduser(username):
   from django.contrib.auth import authenticate
   u = User.objects.create_user(username, '', 'password')
   u.save()
-  u = authenticate(username=username, password='password')
-  if not u or not u.is_active:
-    print(" -> failed to authenticate user")
   return u
 
 # TODO(jon): This currently only test single-request actions
@@ -75,7 +58,7 @@ def test_stuff():
   if not method == 'get' and not method == 'post':
     return
 
-  req = d.new(startresp)
+  req = d.new()
 
   from django.contrib.auth.models import User
   User.objects.all().delete()
@@ -107,82 +90,56 @@ def test_stuff():
   logged_in = False
   user = fuzzy.mk_str('user')
   if user == 'alice' or user == 'bob':
-      from django.apps import apps
-      if not apps.is_installed("django.contrib.sessions"):
-        print(" -> application under test does not support sessions")
-        return
-
       if verbose > 0:
         print('==> accessing %s as %s' % (path, user))
 
-      # Fake a HTTPRequest for getting the login cookie
-      from django.http import HttpRequest
-      from importlib import import_module
-      from django.conf import settings
-      engine = import_module(settings.SESSION_ENGINE)
-      request = HttpRequest()
-      request.session = engine.SessionStore()
-
-      from django.contrib.auth import login
       if user == 'alice':
-          login(request, alice)
+          req.login(username='alice', password='password')
       elif user == 'bob':
-          login(request, bob)
-      request.session.save()
-
-      from django.http import SimpleCookie
-      c = SimpleCookie()
-      c[settings.SESSION_COOKIE_NAME] = request.session.session_key
-      c[settings.SESSION_COOKIE_NAME].update({
-        'max-age': None,
-        'path': '/',
-        'domain': settings.SESSION_COOKIE_DOMAIN,
-        'secure': None,
-        'expires': None
-      })
+          req.login(username='bob', password='password')
 
       logged_in = True
-      if method == 'get':
-        resp = req.get(path, HTTP_COOKIE=c.output(header='', sep='; '))
-      elif method == 'post':
-        resp = req.post(path
-            , HTTP_COOKIE=c.output(header='', sep='; ')
-            , data=data
-            )
   else:
       if verbose > 0:
         print('==> accessing %s anonymously' % path)
 
-      if method == 'get':
-        resp = req.get(path)
-      elif method == 'post':
-        resp = req.post(path, data=data)
+  response = None
+  if method == 'get':
+    response = req.get(path)
+  elif method == 'post':
+    response = req.post(path, data=data)
 
-  out = ""
-  for x in resp:
-    out += x
+  if verbose == 1 and response.status_code == 404:
+    print(" -> 404 not found...")
+  elif verbose == 1:
+    print(' -> %d %s' % (response.status_code, response.reason_phrase))
+  elif verbose > 1:
+    print(' -> %d %s\n -> %s' % (
+      response.status_code,
+      response.reason_phrase,
+      response.items())
+      )
 
-  global st
-  if verbose > 2 or st == "500 INTERNAL SERVER ERROR":
+  if verbose > 2 or response.status_code == 500:
     print(80 * "-")
-    print(re.sub("^", "\t", out))
+    print(re.sub("^", "\t", response.content))
     print(80 * "-")
 
   if logged_in and path == "transfer/":
-      if "Log out" in out:
+      if "Log out" in response.content:
           print(" -> login works. that's nice.")
       else:
           print(" -> login doesn't work :(")
 
       if method == "post":
-        if "warning" in out:
+        if "warning" in response.content:
           # success is also notified using a warning span
-          wtext = re.search('<span class="warning">([^<]*)</span>', out).group(1)
+          wtext = re.search('<span class="warning">([^<]*)</span>', response.content).group(1)
           print(" -> transfer warning: %s" % wtext)
         else:
           print(" -> NO TRANSFER WARNING?!")
           print(80 * "-")
-          print(re.sub("^", "\t", out))
+          print(re.sub("^", "\t", response.content))
           print(80 * "-")
 
   if User.objects.all().count() == 2:

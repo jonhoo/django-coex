@@ -129,9 +129,6 @@ def newget(self, *args, **kwargs):
 
 django.db.models.QuerySet.get = newget
 
-# Mock requests by mocking routing + url parsing
-from django.test.client import RequestFactory
-
 # It's only safe to use SymDjango as a singleton!
 class SymDjango():
     def __init__(self, app, path, viewmap):
@@ -146,27 +143,23 @@ class SymDjango():
         os.environ.update({
             "DJANGO_SETTINGS_MODULE": app + ".settings"
         })
+        django.setup()
 
-    def new(self, response_handler):
-        return SymRequestFactory(self
-            , response_handler
-            , SERVER_NAME = 'concolic.io'
-            )
+    def new(self):
+        return SymClient(self, SERVER_NAME = 'concolic.io')
 
-class SymRequestFactory(RequestFactory):
-    def __init__(self, symdjango, start_response, **defaults):
-        from django.core.servers.basehttp import get_internal_wsgi_application
-        self.symdjango = symdjango
-        self.start_response = start_response
-        self.handler = get_internal_wsgi_application()
-        RequestFactory.__init__(self, **defaults)
+# Mock requests by mocking routing + url parsing
+from django.test.client import Client
+
+class SymClient(Client):
+    def __init__(self, symdjango, **defaults):
+      super(SymClient, self).__init__(False, **defaults)
+      self.symdjango = symdjango
 
     def request(self, **request):
-      environ = self._base_environ(**request)
       with patch('django.core.urlresolvers.RegexURLResolver', new=SymResolver) as mock:
         mock.symdjango = self.symdjango
-        res = self.handler(environ, self.start_response)
-      return res
+        return super(SymClient, self).request(**request)
 
     def generic(self, method, path, data='',
         content_type='application/octet-stream', secure=False, **extra):
@@ -182,9 +175,8 @@ class SymRequestFactory(RequestFactory):
                 query = 'QUERY_STRING' in environ and environ['QUERY_STRING'] or '',
                 fragment = ''
                 )
-        res = super(SymRequestFactory, self).generic(method, path, data,
+        return super(SymClient, self).generic(method, path, data,
             content_type=content_type, secure=secure, **extra)
-      return res
 
 class SymResolver():
     symdjango = None
