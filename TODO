@@ -7,3 +7,6 @@ try/catch around app.run to check assertions never fail
 
 symeval => symbuiltin
   - symint => int
+
+Can we somehow detect available URLs, methods, and form fields?
+This would make it *way* easier to test applications.
