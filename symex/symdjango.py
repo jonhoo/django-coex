@@ -145,6 +145,15 @@ class SymDjango():
         })
         django.setup()
 
+    def setup_models(self, models):
+        from symqueryset import SymManager
+
+        # This could patch every model used by django, but we are really only 
+        # interested in the application's models (it's also less expensive)
+        for model in models:
+            __objects = model.objects
+            model.objects = SymManager(__objects)
+
     def new(self):
         return SymClient(self, SERVER_NAME = 'concolic.io')
 
