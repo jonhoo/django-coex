@@ -187,11 +187,14 @@ class sym_minus(sym_binop):
   def _z3expr(self, printable):
     return z3expr(self.a, printable) - z3expr(self.b, printable)
 
-class sym_mul(sym_binop):
+## Exercise 2: your code here.
+## Implement AST nodes for division and multiplication.
+
+class sym_times(sym_binop):
   def _z3expr(self, printable):
     return z3expr(self.a, printable) * z3expr(self.b, printable)
 
-class sym_div(sym_binop):
+class sym_divided_by(sym_binop):
   def _z3expr(self, printable):
     return z3expr(self.a, printable) / z3expr(self.b, printable)
 
@@ -277,29 +280,6 @@ simplify_patterns = [
   (sym_concat(patname("a"), const_str("")),
    patname("a")
   ),
-  (sym_plus(patname("x"), const_int(0)),
-   patname("x")
-  ),
-  (sym_minus(patname("x"), const_int(0)),
-   patname("x")
-  ),
-  (sym_mul(patname("x"), const_int(1)),
-   patname("x")
-  ),
-  (sym_div(patname("x"), const_int(1)),
-   patname("x")
-  ),
-  (sym_plus(sym_mul(patname("a"), patname("x")),
-            sym_mul(patname("b"), patname("x"))),
-   sym_mul(sym_plus(patname("a"), patname("b")), patname("x"))
-  ),
-  (sym_minus(sym_mul(patname("a"), patname("x")),
-             sym_mul(patname("b"), patname("x"))),
-   sym_mul(sym_minus(patname("a"), patname("b")), patname("x"))
-  ),
-  (sym_not(sym_not(patname("a"))),
-   patname("a")
-  ),
 ]
 
 def pattern_match(expr, pat, vars):
@@ -357,7 +337,6 @@ cur_path_constr_callers = None
 
 def get_caller():
   frame = inspect.currentframe()
-  back = []
   try:
     while True:
       info = inspect.getframeinfo(frame)
@@ -365,11 +344,10 @@ def get_caller():
       ## as well as in the rewritten replacements of dict, %, etc.
       if not info.filename.endswith('fuzzy.py') and\
          not info.filename.endswith('rewriter.py'):
-        back.append((info.filename, info.lineno))
+        return (info.filename, info.lineno)
       frame = frame.f_back
   finally:
     del frame
-    return back
 
 def add_constr(e):
   global cur_path_constr, cur_path_constr_callers
@@ -396,8 +374,8 @@ def uniqname(id):
 
 ## Helper for printing Z3-indented expressions
 
-def indent(s, spaces = '\t'):
-  return spaces + str(s).replace('\n', ' ')
+def indent(s, spaces = '  '):
+  return spaces + str(s).replace('\n', '\n' + spaces)
 
 ## Support for forking because z3str uses lots of global variables
 
@@ -507,16 +485,40 @@ class concolic_int(int):
     return concolic_int(sym_plus(ast(o), ast(self)), res)
 
   def __sub__(self, o):
-    res = self.__v - o
+    if isinstance(o, concolic_int):
+      res = self.__v - o.__v
+    else:
+      res = self.__v - o
     return concolic_int(sym_minus(ast(self), ast(o)), res)
 
+  def __rsub__(self, o):
+    res = o - self.__v
+    return concolic_int(sym_minus(ast(o), ast(self)), res)
+
+  ## Exercise 2: your code here.
+  ## Implement symbolic division and multiplication.
+
   def __mul__(self, o):
-    res = self.__v * o
-    return concolic_int(sym_mul(ast(self), ast(o)), res)
+    if isinstance(o, concolic_int):
+      res = self.__v * o.__v
+    else:
+      res = self.__v * o
+    return concolic_int(sym_times(ast(self), ast(o)), res)
+
+  def __rmul__(self, o):
+    res = o * self.__v
+    return concolic_int(sym_times(ast(o), ast(self)), res)
 
   def __div__(self, o):
-    res = self.__v / o
-    return concolic_int(sym_div(ast(self), ast(o)), res)
+    if isinstance(o, concolic_int):
+      res = self.__v / o.__v
+    else:
+      res = self.__v / o
+    return concolic_int(sym_divided_by(ast(self), ast(o)), res)
+
+  def __rdiv__(self, o):
+    res = o / self.__v
+    return concolic_int(sym_divided_by(ast(o), ast(self)), res)
 
   def _sym_ast(self):
     return self.__sym
@@ -554,12 +556,18 @@ class concolic_str(str):
     res = o + self.__v
     return concolic_str(sym_concat(ast(o), ast(self)), res)
 
+  ## Exercise 4: your code here.
+  ## Implement symbolic versions of string length (override __len__)
+  ## and contains (override __contains__).
+
   def __len__(self):
-    res = len(self.__v)
-    return concolic_int(sym_length(ast(self)), res)
+    return concolic_int(sym_length(ast(self)), len(self.__v))
 
   def __contains__(self, o):
-    res = o in self.__v
+    if isinstance(o, concolic_str):
+      res = o.__v in self.__v
+    else:
+      res = o in self.__v
     return concolic_bool(sym_contains(ast(self), ast(o)), res)
 
   def startswith(self, o):
@@ -651,7 +659,6 @@ class InputQueue(object):
     ## is useful when there's too many inputs to process.
     self.inputs = Queue.PriorityQueue()
     self.inputs.put((0, {}))
-    self.input_history = []
 
     ## "branchcount" is a map from call site (filename and line number)
     ## to the number of branches we have already explored at that site.
@@ -665,37 +672,10 @@ class InputQueue(object):
     (prio, values) = self.inputs.get()
     return values
 
-  def add(self, new_values, caller, uniqueinputs = False):
-    if uniqueinputs:
-      if self.check_input_history(new_values):
-        print "SKIPPING INPUT"
-        return
-
-    prio = self.branchcount[caller[0]]
-    self.branchcount[caller[0]] += 1
+  def add(self, new_values, caller):
+    prio = self.branchcount[caller]
+    self.branchcount[caller] += 1
     self.inputs.put((prio, new_values))
-
-    if uniqueinputs:
-      self.input_history.append((prio, new_values))
-
-  def check_input_history(self, new_values):
-    ## Return True if new_values has been added to the input queue before.
-    for (prio, values) in self.input_history:
-      if self.value_dicts_match(values, new_values):
-        return True
-    return False
-
-  def value_dicts_match(self, old_values, new_values):
-    if len(old_values) != len(new_values):
-      return False
-    if len(old_values) == 0:
-      return True
-    for k in old_values:
-      if k not in new_values:
-        return False
-      if old_values[k] != new_values[k]:
-        return False
-    return True
 
 ## Actual concolic execution API
 
@@ -713,21 +693,13 @@ def mk_str(id):
     concrete_values[id] = ''
   return concolic_str(sym_str(id), concrete_values[id])
 
-def concolic_test(testfunc, maxiter = 100, verbose = 0,
-                  uniqueinputs = True,
-                  removeredundant = True,
-                  usecexcache = True):
+def concolic_test(testfunc, maxiter = 100, verbose = 0):
   ## "checked" is the set of constraints we already sent to Z3 for
   ## checking.  use this to eliminate duplicate paths.
-  checked_paths = set()
+  checked = set()
 
   ## list of inputs we should try to explore.
   inputs = InputQueue()
-
-  ## cache of solutions to previously checked path conditions,
-  ## or lack thereof, being a counterexample.
-  ## a dictionary that maps path conditions to value assignments.
-  cexcache = {}
 
   iter = 0
   while iter < maxiter and not inputs.empty():
@@ -741,8 +713,7 @@ def concolic_test(testfunc, maxiter = 100, verbose = 0,
     cur_path_constr_callers = []
 
     if verbose > 0:
-      # print 'Trying concrete values:', ["%s = %s" % (k, concrete_values[k]) for k in concrete_values if not k.startswith('_t_')]
-      print 'Trying concrete values:', ["%s = %s" % (k, concrete_values[k]) for k in concrete_values]
+      print 'Trying concrete values:', concrete_values
 
     try:
       testfunc()
@@ -752,120 +723,63 @@ def concolic_test(testfunc, maxiter = 100, verbose = 0,
     if verbose > 1:
       print 'Test generated', len(cur_path_constr), 'branches:'
       for (c, caller) in zip(cur_path_constr, cur_path_constr_callers):
-        if verbose > 2:
-          print indent(z3expr(c, True)), '@'
-          for c in caller:
-            print indent(indent('%s:%d' % (c[0], c[1])))
-        else:
-          print indent(z3expr(c, True)), '@', '%s:%d' % (caller[0][0], caller[0][1])
+        print indent(z3expr(c, True)), '@', '%s:%d' % (caller[0], caller[1])
 
     ## for each branch, invoke Z3 to find an input that would go
     ## the other way, and add it to the list of inputs to explore.
 
+    ## Exercise 3: your code here.
+    ##
+    ## Here's a possible plan of attack:
+    ##
+    ## - Iterate over the set of branches in cur_path_constr.
+    ##
+    ## - Compute an AST expression for the constraints necessary
+    ##   to go the other way on that branch.  You can use existing
+    ##   logical AST combinators like sym_not(), sym_and(), etc.
+    ##
+    ##   Note that some of the AST combinators take separate positional
+    ##   arguments. In Python, to unpack a list into separate positional
+    ##   arguments, use the '*' operator documented at
+    ##   https://docs.python.org/2/tutorial/controlflow.html#unpacking-argument-lists
+    ##
+    ## - If this constraint is already in the "checked" set, skip
+    ##   it (otherwise, add it to prevent further duplicates).
+    ##
+    ## - Invoke Z3, along the lines of:
+    ##
+    ##     (ok, model) = fork_and_check(constr)
+    ##
+    ## - If Z3 was able to find example inputs that go the other
+    ##   way on this branch, make a new input set containing the
+    ##   values from Z3's model, and add it to the set of inputs
+    ##   to consider:
+    ##
+    ##     inputs.add(new_values, caller)
+    ##
+    ##   where caller is the corresponding value from the list
+    ##   of call sites (cur_path_constr_callers).
+    ##
+    ##   Note that Z3 might not assign values to every variable,
+    ##   such as if that variable turns out to be irrelevant to
+    ##   the overall constraint, so be sure to preserve values
+    ##   from the initial input (concrete_values).
+
     partial_path = []
     for (branch_condition, caller) in \
         zip(cur_path_constr, cur_path_constr_callers):
-
-      ## Identify a new branch forked off the current path,
-      ## but skip it if it has been solved before.
-      if removeredundant:
-        new_branch = extend_and_prune(partial_path, sym_not(branch_condition))
-        partial_path = extend_and_prune(partial_path, branch_condition)
-      else:
-        new_branch = partial_path + [sym_not(branch_condition)]
-        partial_path = partial_path + [branch_condition]
-      new_path_condition = sym_and(*new_branch)
-      if new_path_condition in checked_paths:
+      partial_path.append(branch_condition)
+      new_path_condition = sym_and(*(partial_path[0:-1] + \
+                                     [sym_not(branch_condition)]))
+      if new_path_condition in checked:
         continue
-
-      ## Solve for a set of inputs that goes down the new branch.
-      ## Avoid solving the branch again in the future.
-      (ok, model) = (None, None)
-      if usecexcache:
-        (ok, model) = check_cache(new_path_condition, cexcache)
-      if ok != None:
-        print "USED CEXCACHE"
-      else:
-        (ok, model) = fork_and_check(new_path_condition)
-      checked_paths.add(new_path_condition)
-
-      ## If a solution was found, put it on the input queue,
-      ## (if it hasn't been inserted before).
+      checked.add(new_path_condition)
+      (ok, model) = fork_and_check(new_path_condition)
       if ok == z3.sat:
-        new_values = {}
+        new_values = dict(concrete_values)
         for k in model:
-          if k in concrete_values:
-            new_values[k] = model[k]
-        inputs.add(new_values, caller, uniqueinputs)
-        if usecexcache:
-          cexcache[new_path_condition] = new_values
-      else:
-        if usecexcache:
-          cexcache[new_path_condition] = None
+          new_values[k] = model[k]
+        inputs.add(new_values, caller)
 
   if verbose > 0:
     print 'Stopping after', iter, 'iterations'
-
-def check_cache(path_condition, cache):
-  ## return (ok, model) where
-  ## ok = z3.unsat if a subset of path_condition has no solution.
-  ## ok = z3.sat if a superset of path_condition has a solution.
-  ## ok = None if neither of the above can be ascertained.
-
-  for old_path in cache:
-    if cache[old_path] is None and \
-       issubset(old_path.args, path_condition.args):
-      return (z3.unsat, None)
-    if cache[old_path] is not None and \
-       issubset(path_condition.args, old_path.args):
-      return (z3.sat, cache[old_path])
-  return (None, None)
-
-  # (ok, model) = fork_and_check(path_condition)
-  # return (ok, model)
-
-def issubset(candidate_set, context_set):
-  for elem in candidate_set:
-    if elem not in context_set:
-      return False
-  return True
-
-def extend_and_prune(partial_path, branch_condition):
-  ## Remove any constraints in partial_path that are
-  ## implied by branch_condition.
-  prune_set = []
-  for constraint in partial_path:
-    if implies(branch_condition, constraint):
-      prune_set.append(constraint)
-  if len(prune_set) > 0:
-    for constraint in prune_set:
-      partial_path.remove(constraint)
-    return partial_path + [branch_condition]
-
-  ## If none are removed above, see if any constraints
-  ## in partial_path imply branch_condition.
-  for constraint in partial_path:
-    if implies(constraint, branch_condition):
-      return partial_path
-
-  ## Otherwise return the standard append.
-  return partial_path + [branch_condition]
-
-def implies(antecedent, consequent):
-  ## Want to prove Antecedent --> Consequent, or (not A) OR (C).
-  ## So try to find a counterexample, solve for (A) AND (not C).
-  ## If no solution (unsat), then the implication is true; otherwise false.
-  (ok, _) = fork_and_check(sym_and(antecedent, sym_not(consequent)))
-  return (ok == z3.unsat)
-
-def isrelevant(ast):
-  global concrete_values
-  if isinstance(ast, sym_int) or isinstance(ast, sym_str):
-    if ast.id in concrete_values:
-      return True
-  if isinstance(ast, sym_func_apply):
-    # Recurse on the ast's arguments.
-    for arg in ast.args:
-      if isrelevant(arg):
-        return True
-  return False

@@ -18,7 +18,6 @@ import symex.rewriter as rewriter
 importwrapper.rewrite_imports(rewriter.rewriter)
 
 from symex.symdjango import SymDjango, post_data
-import symex.symsql
 import symex.symeval
 
 app = "zoobar"
