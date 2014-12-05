@@ -36,6 +36,10 @@ appviews = {
 
 d = SymDjango(settings, os.path.abspath(os.path.dirname(__file__) + '../app'), appviews)
 
+from zapp.models import Person, Transfer
+from django.contrib.auth.models import User
+d.setup_models([User, Person, Transfer])
+
 # Only safe to load now that it's been patched and added to import path
 import zoobar
 
@@ -68,6 +72,7 @@ def test_stuff():
 
   from zapp.models import Transfer
   Transfer.objects.all().delete()
+  #User.objects.get(username = 'alice')
 
   ## In two cases, we over-restrict the inputs in order to reduce the
   ## number of paths that "make check" explores, so that it finishes

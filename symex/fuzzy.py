@@ -277,6 +277,29 @@ simplify_patterns = [
   (sym_concat(patname("a"), const_str("")),
    patname("a")
   ),
+  (sym_plus(patname("x"), const_int(0)),
+   patname("x")
+  ),
+  (sym_minus(patname("x"), const_int(0)),
+   patname("x")
+  ),
+  (sym_mul(patname("x"), const_int(1)),
+   patname("x")
+  ),
+  (sym_div(patname("x"), const_int(1)),
+   patname("x")
+  ),
+  (sym_plus(sym_mul(patname("a"), patname("x")),
+            sym_mul(patname("b"), patname("x"))),
+   sym_mul(sym_plus(patname("a"), patname("b")), patname("x"))
+  ),
+  (sym_minus(sym_mul(patname("a"), patname("x")),
+             sym_mul(patname("b"), patname("x"))),
+   sym_mul(sym_minus(patname("a"), patname("b")), patname("x"))
+  ),
+  (sym_not(sym_not(patname("a"))),
+   patname("a")
+  ),
 ]
 
 def pattern_match(expr, pat, vars):
@@ -628,6 +651,7 @@ class InputQueue(object):
     ## is useful when there's too many inputs to process.
     self.inputs = Queue.PriorityQueue()
     self.inputs.put((0, {}))
+    self.input_history = []
 
     ## "branchcount" is a map from call site (filename and line number)
     ## to the number of branches we have already explored at that site.
@@ -641,10 +665,37 @@ class InputQueue(object):
     (prio, values) = self.inputs.get()
     return values
 
-  def add(self, new_values, caller):
+  def add(self, new_values, caller, uniqueinputs = False):
+    if uniqueinputs:
+      if self.check_input_history(new_values):
+        print "SKIPPING INPUT"
+        return
+
     prio = self.branchcount[caller[0]]
     self.branchcount[caller[0]] += 1
     self.inputs.put((prio, new_values))
+
+    if uniqueinputs:
+      self.input_history.append((prio, new_values))
+
+  def check_input_history(self, new_values):
+    ## Return True if new_values has been added to the input queue before.
+    for (prio, values) in self.input_history:
+      if self.value_dicts_match(values, new_values):
+        return True
+    return False
+
+  def value_dicts_match(self, old_values, new_values):
+    if len(old_values) != len(new_values):
+      return False
+    if len(old_values) == 0:
+      return True
+    for k in old_values:
+      if k not in new_values:
+        return False
+      if old_values[k] != new_values[k]:
+        return False
+    return True
 
 ## Actual concolic execution API
 
@@ -662,13 +713,21 @@ def mk_str(id):
     concrete_values[id] = ''
   return concolic_str(sym_str(id), concrete_values[id])
 
-def concolic_test(testfunc, maxiter = 100, verbose = 0):
+def concolic_test(testfunc, maxiter = 100, verbose = 0,
+                  uniqueinputs = True,
+                  removeredundant = True,
+                  usecexcache = True):
   ## "checked" is the set of constraints we already sent to Z3 for
   ## checking.  use this to eliminate duplicate paths.
-  checked = set()
+  checked_paths = set()
 
   ## list of inputs we should try to explore.
   inputs = InputQueue()
+
+  ## cache of solutions to previously checked path conditions,
+  ## or lack thereof, being a counterexample.
+  ## a dictionary that maps path conditions to value assignments.
+  cexcache = {}
 
   iter = 0
   while iter < maxiter and not inputs.empty():
@@ -682,7 +741,8 @@ def concolic_test(testfunc, maxiter = 100, verbose = 0):
     cur_path_constr_callers = []
 
     if verbose > 0:
-      print 'Trying concrete values:', ["%s = %s" % (k, concrete_values[k]) for k in concrete_values if not k.startswith('_t_')]
+      # print 'Trying concrete values:', ["%s = %s" % (k, concrete_values[k]) for k in concrete_values if not k.startswith('_t_')]
+      print 'Trying concrete values:', ["%s = %s" % (k, concrete_values[k]) for k in concrete_values]
 
     try:
       testfunc()
@@ -702,42 +762,110 @@ def concolic_test(testfunc, maxiter = 100, verbose = 0):
     ## for each branch, invoke Z3 to find an input that would go
     ## the other way, and add it to the list of inputs to explore.
 
-    build = []
-    i = -1
-    for p in cur_path_constr:
-      i = i + 1
+    partial_path = []
+    for (branch_condition, caller) in \
+        zip(cur_path_constr, cur_path_constr_callers):
 
-      if i == 0:
-        left = p
-        right = sym_not(p)
+      ## Identify a new branch forked off the current path,
+      ## but skip it if it has been solved before.
+      if removeredundant:
+        new_branch = extend_and_prune(partial_path, sym_not(branch_condition))
+        partial_path = extend_and_prune(partial_path, branch_condition)
       else:
-        tohere = sym_and(*build)
-        left = sym_and(tohere, p)
-        right = sym_and(tohere, sym_not(p))
+        new_branch = partial_path + [sym_not(branch_condition)]
+        partial_path = partial_path + [branch_condition]
+      new_path_condition = sym_and(*new_branch)
+      if new_path_condition in checked_paths:
+        continue
 
-      build.append(p)
+      ## Solve for a set of inputs that goes down the new branch.
+      ## Avoid solving the branch again in the future.
+      (ok, model) = (None, None)
+      if usecexcache:
+        (ok, model) = check_cache(new_path_condition, cexcache)
+      if ok != None:
+        print "USED CEXCACHE"
+      else:
+        (ok, model) = fork_and_check(new_path_condition)
+      checked_paths.add(new_path_condition)
 
-      if left not in checked:
-        checked.add(left)
-
-        (ok, model) = fork_and_check(left)
-        if ok:
-            new_values = concrete_values.copy()
-            if model is not None:
-                for key in model:
-                  new_values[key] = model[key]
-            inputs.add(new_values, cur_path_constr_callers[i])
-
-      if right not in checked:
-        checked.add(right)
-
-        (ok, model) = fork_and_check(right)
-        if ok:
-            new_values = concrete_values.copy()
-            if model is not None:
-                for key in model:
-                  new_values[key] = model[key]
-            inputs.add(new_values, cur_path_constr_callers[i])
+      ## If a solution was found, put it on the input queue,
+      ## (if it hasn't been inserted before).
+      if ok == z3.sat:
+        new_values = {}
+        for k in model:
+          if k in concrete_values:
+            new_values[k] = model[k]
+        inputs.add(new_values, caller, uniqueinputs)
+        if usecexcache:
+          cexcache[new_path_condition] = new_values
+      else:
+        if usecexcache:
+          cexcache[new_path_condition] = None
 
   if verbose > 0:
     print 'Stopping after', iter, 'iterations'
+
+def check_cache(path_condition, cache):
+  ## return (ok, model) where
+  ## ok = z3.unsat if a subset of path_condition has no solution.
+  ## ok = z3.sat if a superset of path_condition has a solution.
+  ## ok = None if neither of the above can be ascertained.
+
+  for old_path in cache:
+    if cache[old_path] is None and \
+       issubset(old_path.args, path_condition.args):
+      return (z3.unsat, None)
+    if cache[old_path] is not None and \
+       issubset(path_condition.args, old_path.args):
+      return (z3.sat, cache[old_path])
+  return (None, None)
+
+  # (ok, model) = fork_and_check(path_condition)
+  # return (ok, model)
+
+def issubset(candidate_set, context_set):
+  for elem in candidate_set:
+    if elem not in context_set:
+      return False
+  return True
+
+def extend_and_prune(partial_path, branch_condition):
+  ## Remove any constraints in partial_path that are
+  ## implied by branch_condition.
+  prune_set = []
+  for constraint in partial_path:
+    if implies(branch_condition, constraint):
+      prune_set.append(constraint)
+  if len(prune_set) > 0:
+    for constraint in prune_set:
+      partial_path.remove(constraint)
+    return partial_path + [branch_condition]
+
+  ## If none are removed above, see if any constraints
+  ## in partial_path imply branch_condition.
+  for constraint in partial_path:
+    if implies(constraint, branch_condition):
+      return partial_path
+
+  ## Otherwise return the standard append.
+  return partial_path + [branch_condition]
+
+def implies(antecedent, consequent):
+  ## Want to prove Antecedent --> Consequent, or (not A) OR (C).
+  ## So try to find a counterexample, solve for (A) AND (not C).
+  ## If no solution (unsat), then the implication is true; otherwise false.
+  (ok, _) = fork_and_check(sym_and(antecedent, sym_not(consequent)))
+  return (ok == z3.unsat)
+
+def isrelevant(ast):
+  global concrete_values
+  if isinstance(ast, sym_int) or isinstance(ast, sym_str):
+    if ast.id in concrete_values:
+      return True
+  if isinstance(ast, sym_func_apply):
+    # Recurse on the ast's arguments.
+    for arg in ast.args:
+      if isrelevant(arg):
+        return True
+  return False
