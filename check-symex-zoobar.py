@@ -86,7 +86,7 @@ def test_stuff():
         zoobars = fuzzy.mk_int('transfer.zoobars'),
         recipient = fuzzy.mk_str('transfer.recipient')
       )
-
+	
   logged_in = False
   user = fuzzy.mk_str('user')
   if user == 'alice' or user == 'bob':
@@ -102,7 +102,7 @@ def test_stuff():
   else:
       if verbose > 0:
         print('==> accessing %s anonymously' % path)
-
+ 
   response = None
   if method == 'get':
     response = req.get(path)

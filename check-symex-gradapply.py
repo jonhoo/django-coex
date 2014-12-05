@@ -42,6 +42,8 @@ d = SymDjango(settings, os.path.abspath(os.path.dirname(__file__) + '../gradappl
 import apply
 
 # TODO(jon): This currently only test single-request actions
+class concolicTest(TestCase):
+fixtures = ['testdb/login_user', 'testdb/login_conf', 'testdb/review_reader']
 def test_stuff():
   method = fuzzy.mk_str('method')
   if not method == 'get' and not method == 'post':
