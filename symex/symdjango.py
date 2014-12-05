@@ -135,8 +135,8 @@ class SymDjango():
         self.settings = settings
         self.path = path
         self.viewmap = viewmap
-	print path
-        # search for modules inside application under test
+        print path
+	# search for modules inside application under test
         sys.path.append(path)
 
         # Make sure Django reads the correct settings
@@ -193,16 +193,16 @@ class SymResolver():
     def __init__(self, regex, conf):
         self.reverseDict = {}
         for m in SymResolver.symdjango.viewmap:
-            self.reverseDict[m] = ("", self)
+	    ind = m.find('.')
+            self.reverseDict[m[:ind]] = ("", self)
 
     def resolve(self, path):
         from django.core.urlresolvers import Resolver404
-        for m in SymResolver.symdjango.viewmap:
-            for v in SymResolver.symdjango.viewmap[m]:
-                s = SymURL(SymResolver.symdjango, m, v)
-                r = s.resolve(path)
-                if r is not None:
-                    return r
+        for v in SymResolver.symdjango.viewmap:
+            s = SymURL(SymResolver.symdjango, v)
+            r = s.resolve(path)
+            if r is not None:
+                return r
 
         raise Resolver404({'path': path})
 
@@ -218,14 +218,13 @@ class SymResolver():
         return {}
 
 class SymURL():
-    def __init__(self, symdjango, mod, v):
+    def __init__(self, symdjango, v):
         self.symdjango = symdjango
-        self.mod = mod
         self.view = v
 
     @property
     def callback(self):
-        return self.symdjango.viewmap[self.mod][self.view]
+        return self.symdjango.viewmap[self.view]
 
     def resolve(self, path):
         from django.core.urlresolvers import ResolverMatch
@@ -240,5 +239,8 @@ class SymURL():
                 args = [] # unnamed args in url
 
             kwargs.update({}) # extra args passed to view from urls.py
-            views = importlib.import_module(self.mod + '.views')
-            return ResolverMatch(getattr(views, self.view), args, kwargs, self.view)
+	    ind = self.view.rfind('.');
+	    mod = self.view[:ind]
+	    method = self.view[(ind+1):]
+            views = importlib.import_module(mod);
+	    return ResolverMatch(getattr(views, method), args, kwargs, method)

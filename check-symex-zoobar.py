@@ -21,20 +21,15 @@ from symex.symdjango import SymDjango, post_data
 import symex.symeval
 
 settings = "zoobar.settings"
-appviews = {
-        "zapp": {
-            "index": (lambda p: p == "/"),
-            "users": (lambda p: p == "users/"),
-            "transfer": (lambda p: p == "transfer/")
-        },
-        "zlogio": {
-            "login": (lambda p: p == "accounts/login/"),
-            "logout": (lambda p: p == "accounts/logout/"),
-        },
-        "": {}
+appviews = { 
+	"zapp.views.index": (lambda p: p == "/"),
+        "zapp.views.users": (lambda p: p == "users/"),
+        "zapp.views.transfer": (lambda p: p == "transfer/"),    
+        "zlogio.views.login": (lambda p: p == "accounts/login/"),
+	"zlogio.views.logout": (lambda p: p == "accounts/logout/")
 }
 
-d = SymDjango(settings, os.path.abspath(os.path.dirname(__file__) + '../app'), appviews)
+d = SymDjango(settings, os.path.abspath(os.path.dirname(__file__) + './app'), appviews)
 
 from zapp.models import Person, Transfer
 from django.contrib.auth.models import User
