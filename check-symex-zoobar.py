@@ -18,10 +18,9 @@ import symex.rewriter as rewriter
 importwrapper.rewrite_imports(rewriter.rewriter)
 
 from symex.symdjango import SymDjango, post_data
-import symex.symsql
 import symex.symeval
 
-app = "zoobar"
+settings = "zoobar.settings"
 appviews = {
         "zapp": {
             "index": (lambda p: p == "/"),
@@ -35,7 +34,7 @@ appviews = {
         "": {}
 }
 
-d = SymDjango(app, os.path.abspath(os.path.dirname(__file__) + '/app'), appviews)
+d = SymDjango(settings, os.path.abspath(os.path.dirname(__file__) + '../app'), appviews)
 
 # Only safe to load now that it's been patched and added to import path
 import zoobar

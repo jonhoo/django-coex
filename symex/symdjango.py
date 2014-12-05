@@ -131,17 +131,17 @@ django.db.models.QuerySet.get = newget
 
 # It's only safe to use SymDjango as a singleton!
 class SymDjango():
-    def __init__(self, app, path, viewmap):
-        self.app = app
+    def __init__(self, settings, path, viewmap):
+        self.settings = settings
         self.path = path
         self.viewmap = viewmap
-
+	print path
         # search for modules inside application under test
         sys.path.append(path)
 
         # Make sure Django reads the correct settings
         os.environ.update({
-            "DJANGO_SETTINGS_MODULE": app + ".settings"
+            "DJANGO_SETTINGS_MODULE": settings
         })
         django.setup()
 
