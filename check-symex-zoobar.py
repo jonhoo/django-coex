@@ -22,14 +22,14 @@ import symex.symeval
 
 settings = "zoobar.settings"
 appviews = { 
-	"zapp.views.index": (lambda p: p == "/"),
-        "zapp.views.users": (lambda p: p == "users/"),
-        "zapp.views.transfer": (lambda p: p == "transfer/"),    
-        "zlogio.views.login": (lambda p: p == "accounts/login/"),
-	"zlogio.views.logout": (lambda p: p == "accounts/logout/")
-}
+    "zapp.views.index": (lambda p: p == "/"),
+    "zapp.views.users": (lambda p: p == "users/"),
+    "zapp.views.transfer": (lambda p: p == "transfer/"),
+    "zlogio.views.login": (lambda p: p == "accounts/login/"),
+    "zlogio.views.logout": (lambda p: p == "accounts/logout/")
+    }
 
-d = SymDjango(settings, os.path.abspath(os.path.dirname(__file__) + './app'), appviews)
+d = SymDjango(settings, os.path.abspath(os.path.dirname(__file__) + '/app'), appviews)
 
 from zapp.models import Person, Transfer
 from django.contrib.auth.models import User
@@ -90,18 +90,18 @@ def test_stuff():
   logged_in = False
   user = fuzzy.mk_str('user')
   if user == 'alice' or user == 'bob':
-      if verbose > 0:
-        print('==> accessing %s as %s' % (path, user))
+    if verbose > 0:
+      print('==> accessing %s as %s' % (path, user))
 
       if user == 'alice':
-          req.login(username='alice', password='password')
+        req.login(username='alice', password='password')
       elif user == 'bob':
-          req.login(username='bob', password='password')
+        req.login(username='bob', password='password')
 
       logged_in = True
   else:
-      if verbose > 0:
-        print('==> accessing %s anonymously' % path)
+    if verbose > 0:
+      print('==> accessing %s anonymously' % path)
 
   response = None
   if method == 'get':
@@ -118,7 +118,7 @@ def test_stuff():
       response.status_code,
       response.reason_phrase,
       response.items())
-      )
+    )
 
   if verbose > 2 or response.status_code == 500:
     print(80 * "-")
@@ -126,21 +126,21 @@ def test_stuff():
     print(80 * "-")
 
   if logged_in and path == "transfer/":
-      if "Log out" in response.content:
-          print(" -> login works. that's nice.")
-      else:
-          print(" -> login doesn't work :(")
+    if "Log out" in response.content:
+      print(" -> login works. that's nice.")
+    else:
+      print(" -> login doesn't work :(")
 
-      if method == "post":
-        if "warning" in response.content:
-          # success is also notified using a warning span
-          wtext = re.search('<span class="warning">([^<]*)</span>', response.content).group(1)
-          print(" -> transfer warning: %s" % wtext)
-        else:
-          print(" -> NO TRANSFER WARNING?!")
-          print(80 * "-")
-          print(re.sub("^", "\t", response.content))
-          print(80 * "-")
+    if method == "post":
+      if "warning" in response.content:
+        # success is also notified using a warning span
+        wtext = re.search('<span class="warning">([^<]*)</span>', response.content).group(1)
+        print(" -> transfer warning: %s" % wtext)
+      else:
+        print(" -> NO TRANSFER WARNING?!")
+        print(80 * "-")
+        print(re.sub("^", "\t", response.content))
+        print(80 * "-")
 
   if User.objects.all().count() == 2:
     balance2 = sum([u.person.zoobars for u in User.objects.all()])
