@@ -650,7 +650,7 @@ class InputQueue(object):
     ## input also has a priority (lower is "more important"), which
     ## is useful when there's too many inputs to process.
     self.inputs = Queue.PriorityQueue()
-    self.inputs.put((0, {}))
+    self.inputs.put((0, {'values': {}, 'path_condition': None}))
     self.input_history = []
 
     ## "branchcount" is a map from call site (filename and line number)
@@ -663,9 +663,9 @@ class InputQueue(object):
 
   def get(self):
     (prio, values) = self.inputs.get()
-    return values
+    return (values['values'], values['path_condition'])
 
-  def add(self, new_values, caller, uniqueinputs = False):
+  def add(self, new_values, caller, path_condition, uniqueinputs = False):
     if uniqueinputs:
       if self.check_input_history(new_values):
         print "SKIPPING INPUT"
@@ -673,7 +673,7 @@ class InputQueue(object):
 
     prio = self.branchcount[caller[0]]
     self.branchcount[caller[0]] += 1
-    self.inputs.put((prio, new_values))
+    self.inputs.put((prio, {'values': new_values, 'path_condition': path_condition}))
 
     if uniqueinputs:
       self.input_history.append((prio, new_values))
@@ -734,7 +734,8 @@ def concolic_test(testfunc, maxiter = 100, verbose = 0,
     iter += 1
 
     global concrete_values
-    concrete_values = inputs.get()
+    global path_condition
+    (concrete_values, path_condition) = inputs.get()
 
     global cur_path_constr, cur_path_constr_callers
     cur_path_constr = []
@@ -796,7 +797,7 @@ def concolic_test(testfunc, maxiter = 100, verbose = 0,
         for k in model:
           if k in concrete_values:
             new_values[k] = model[k]
-        inputs.add(new_values, caller, uniqueinputs)
+        inputs.add(new_values, caller, new_path_condition, uniqueinputs)
         if usecexcache:
           cexcache[new_path_condition] = new_values
       else:

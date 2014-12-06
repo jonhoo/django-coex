@@ -1,5 +1,6 @@
 from django.db.models import Manager
 from django.db.models.query import QuerySet
+from django.utils import six
 
 import fuzzy
 
@@ -43,18 +44,18 @@ class SymQuerySet(QuerySet, SymMixin):
 
     def filter(self, *args, **kwargs):
         #print 'filter'
-        mutations = self._mutate(*args, **kwargs)
+        (op, value, mutations) = self._mutate(*args, **kwargs)
         actual = self._apply_filter(*args, **kwargs)
-        mutations = self.remove_dead_mutations(actual, mutations)
+        mutations = self._remove_dead_mutations(actual, mutations)
+        self._create_constraints(op, value, mutations)
         return actual
 
     def _apply_filter(self, *args, **kwargs):
         from django.core.exceptions import FieldError
         try:
-            import pdb; pdb.set_trace()
             return super(SymQuerySet, self).filter(*args, **kwargs)
         except FieldError: 
-            pass
+            return None
 
     #
     # Based on ConSMutate: SQL mutants for guiding concolic testing of database 
@@ -77,49 +78,74 @@ class SymQuerySet(QuerySet, SymMixin):
     # 3. Run original filter
     # 4. For each mutation: 
     #   i. Run it and compare with original
-    #   ii.If result is the same (called 'dead' mutations in the paper): discard
-    #   iii.If result is different: mutated condition explores different 'branch'
-    #       of the DB. Add the symmetric difference of the original and the 
-    #       mutation to the path constraints
+    #   ii.If result is different (called 'dead' mutations in the paper): discard
+    #   iii.If result is the same: Add the symmetric difference of the original 
+    #       and the mutation to the path constraints
     #
     def _mutate(self, *args, **kwargs):
-        mutations = []
+        mutations = {} 
         for arg in kwargs:
             lookups, parts, reffed_aggregate = self.query.solve_lookup_type(arg)
 
             if len(lookups) != 1:
                 continue
 
-            mutated_filters = []
+            mutated_filters = {}
             operator = lookups[0]
             filter_column = '_'.join(parts)
             filter_value = kwargs[arg]
 
             mutate_operators = [op for op in self.operators if op != operator]
             for op in mutate_operators:
-                mutated_filters.append({filter_column + '__' + op: filter_value})
+                mutated_filters[op] = {filter_column + '__' + op: filter_value}
 
             # TODO: currently only handles filters with single column queries
             # e.g. username='alice'. Ideally, this would handle filters over
             # multiple columns e.g. find the transfers of more than 10 zoobars 
             # to alice recipient='alice' && zoobars > 10
             #break
-            return self._create_mutated_querysets(mutated_filters, *args) 
+            return (op, filter_value, self._create_mutated_querysets(mutated_filters, *args))
 
             #mutations.append(mutation_set)
 
         return mutations
 
     def _create_mutated_querysets(self, mutated_filters, *args):
-        mutations = []
-        for filter_kv in mutated_filters:
+        mutations = {}
+        for op in mutated_filters:
+            filter_kv = mutated_filters[op]
             mutated_queryset = self._apply_filter(*args, **filter_kv)
-            mutations.append(mutated_queryset)
+            mutations[op] = mutated_queryset
         return mutations
 
-    def remove_dead_mutations(self, original_queryset, mutations):
-        unique_mutations = [m for m in mutations if original_queryset != m]
+    def _remove_dead_mutations(self, original_queryset, mutations):
+        unique_mutations = {}
+        items = list(six.moves.map(repr, original_queryset))
+        for op in mutations:
+            mutation = mutations[op]
+            if self._is_equal(items, mutation):
+                unique_mutations[op] = mutation
         return unique_mutations
+
+    def _is_equal(self, values, other_queryset):
+        items = list(six.moves.map(repr, other_queryset))
+        return items == values
+
+    def _create_constraints(self, op, value, mutations):
+        pass
+        #for op in mutations:
+            #if op == 'gt':
+                 #l
+            #else if op == 'gte':
+            #else if op == 'lt':
+            #else if op == 'lte':
+            #else if op == 'exact':
+
+            #concolic_bool(sym_and())
+            #break
+
+    #def _
+
 
 class SymManager(Manager, SymMixin):
     def __init__(self, manager):
