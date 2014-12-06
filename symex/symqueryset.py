@@ -162,7 +162,6 @@ class SymQuerySet(QuerySet, SymMixin):
     if sym_type is None:
       return None
 
-    import pdb; pdb.set_trace()
     return sym_type(ast(sym), ast(sym.concrete_value()))
 
 
