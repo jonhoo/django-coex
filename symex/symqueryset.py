@@ -2,7 +2,7 @@ from django.db.models import Manager
 from django.db.models.query import QuerySet
 from django.utils import six
 
-import fuzzy
+from fuzzy import ast, sym_eq, sym_not, sym_or, sym_and, sym_gt, sym_lt, concolic_int
 
 class SymMixin():
   pass
@@ -46,8 +46,10 @@ class SymQuerySet(QuerySet, SymMixin):
   def filter(self, *args, **kwargs):
     (op, value, mutations) = self._mutate(*args, **kwargs)
     actual = self._apply_filter(*args, **kwargs)
-    mutations = self._remove_dead_mutations(actual, mutations)
-    self._create_constraints(op, value, mutations)
+
+    if isinstance(value, concolic_int):
+      mutations = self._remove_dead_mutations(actual, mutations)
+      self._create_constraints(op, value, mutations)
     return actual
 
   def _apply_filter(self, *args, **kwargs):
@@ -106,7 +108,7 @@ class SymQuerySet(QuerySet, SymMixin):
       #break
       return (op, filter_value, self._create_mutated_querysets(mutated_filters, *args))
 
-      #mutations.append(mutation_set)
+    #mutations.append(mutation_set)
 
     return mutations
 
@@ -131,20 +133,37 @@ class SymQuerySet(QuerySet, SymMixin):
     items = list(six.moves.map(repr, other_queryset))
     return items == values
 
-  def _create_constraints(self, op, value, mutations):
-    pass
-    #for op in mutations:
-            #if op == 'gt':
-                 #l
-            #else if op == 'gte':
-            #else if op == 'lt':
-            #else if op == 'lte':
-            #else if op == 'exact':
 
-            #concolic_bool(sym_and())
-            #break
+  def _create_constraints(self, original_op, sym, mutations):
+    original = self._create_condition(original_op, sym)
+    t_original = sym_eq(original, True)
+    f_original = sym_eq(original, False)
 
-    #def _
+    for op in mutations:
+      mutant = self._create_condition(op, sym)
+      if mutant is None:
+        return None
+
+      t_mutant = sym_eq(mutant, True)
+      f_mutant = sym_eq(mutant, False)
+    
+      return sym_or(sym_and(t_original, f_mutant), sym_and(f_original, t_mutant))
+
+  def _create_condition(self, op, sym):
+    sym_type = None
+
+    if op == 'gt':
+      sym_type = sym_gt
+    elif op == 'lt':
+      sym_type = sym_lt
+    elif op == 'exact':
+      sym_type = sym_eq
+
+    if sym_type is None:
+      return None
+
+    import pdb; pdb.set_trace()
+    return sym_type(ast(sym), ast(sym.concrete_value()))
 
 
 class SymManager(Manager, SymMixin):

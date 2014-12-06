@@ -473,6 +473,9 @@ class concolic_int(int):
     self.__sym = sym
     return self
 
+  def concrete_value(self):
+    return self.__v
+
   def __eq__(self, o):
     if not isinstance(o, int):
       return False
