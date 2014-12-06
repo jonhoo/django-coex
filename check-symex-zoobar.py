@@ -26,7 +26,8 @@ appviews = {
     "zapp.views.users": (lambda p: p == "users/"),
     "zapp.views.transfer": (lambda p: p == "transfer/"),
     "zlogio.views.login": (lambda p: p == "accounts/login/"),
-    "zlogio.views.logout": (lambda p: p == "accounts/logout/")
+    "zlogio.views.logout": (lambda p: p == "accounts/logout/"),
+    "url.parameter.example": (lambda p: (p == "/", {name: "this"}))
     }
 
 d = SymDjango(settings, os.path.abspath(os.path.dirname(__file__) + '/app'), appviews)

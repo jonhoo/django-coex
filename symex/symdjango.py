@@ -228,17 +228,26 @@ class SymURL():
 
   def resolve(self, path):
     from django.core.urlresolvers import ResolverMatch
-    if self.callback(path):
-      kwargs = {
-          # named groups in url
-          }
+    match = self.callback(path)
+    if match:
+      if not isinstance(match, tuple):
+        match = (match, {}, [])
+      if len(match) == 1:
+        match = (match[0], {})
+      if len(match) == 2:
+        match = (match[0], match[1], [])
 
+      # From core/urlresolvers.py (:222 in 1.7 stable):
+      # If there are any named groups, use those as kwargs, ignoring non-named
+      # groups. Otherwise, pass all non-named arguments as positional
+      # arguments.
+      kwargs = match[1]
       if kwargs:
         args = ()
       else:
-        args = [] # unnamed args in url
+        args = match[2]
 
-      kwargs.update({}) # extra args passed to view from urls.py
+      kwargs.update({}) # TODO: extra args passed to view from urls.py
       ind = self.view.rfind('.');
       mod = self.view[:ind]
       method = self.view[(ind+1):]
