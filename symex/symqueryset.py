@@ -23,7 +23,7 @@ class QueryMutation(object):
     pass
 
 class SymQuerySet(QuerySet, SymMixin):
-    operators = ['lte', 'gte', 'gt', 'lt', 'ne', 'exact'];
+    operators = ['lte', 'gte', 'gt', 'lt', 'exact'];
 
     # TODO: merge with newget in symdjango
     #def get(self, *args, **kwargs):
@@ -43,13 +43,18 @@ class SymQuerySet(QuerySet, SymMixin):
 
     def filter(self, *args, **kwargs):
         #print 'filter'
-        mutations = self._mutate()
+        mutations = self._mutate(*args, **kwargs)
         actual = self._apply_filter(*args, **kwargs)
-        mutations = self.remove_live_mutations(actual, mutations)
+        mutations = self.remove_dead_mutations(actual, mutations)
         return actual
 
     def _apply_filter(self, *args, **kwargs):
-        return super(SymQuerySet, self).filter(*args, **kwargs)
+        from django.core.exceptions import FieldError
+        try:
+            import pdb; pdb.set_trace()
+            return super(SymQuerySet, self).filter(*args, **kwargs)
+        except FieldError: 
+            pass
 
     #
     # Based on ConSMutate: SQL mutants for guiding concolic testing of database 
@@ -72,15 +77,15 @@ class SymQuerySet(QuerySet, SymMixin):
     # 3. Run original filter
     # 4. For each mutation: 
     #   i. Run it and compare with original
-    #   ii.If result is the same (called 'live' mutations in the paper): discard
+    #   ii.If result is the same (called 'dead' mutations in the paper): discard
     #   iii.If result is different: mutated condition explores different 'branch'
-    #       of the DB. Negate its condition and add it to the existing path
-    #       constraints
+    #       of the DB. Add the symmetric difference of the original and the 
+    #       mutation to the path constraints
     #
     def _mutate(self, *args, **kwargs):
         mutations = []
         for arg in kwargs:
-            lookups, parts, reffed_aggregate = queryset.query.solve_lookup_type(arg)
+            lookups, parts, reffed_aggregate = self.query.solve_lookup_type(arg)
 
             if len(lookups) != 1:
                 continue
@@ -90,28 +95,29 @@ class SymQuerySet(QuerySet, SymMixin):
             filter_column = '_'.join(parts)
             filter_value = kwargs[arg]
 
-            mutate_operators = [op for op in operators if op != operator]
+            mutate_operators = [op for op in self.operators if op != operator]
             for op in mutate_operators:
-                mutation_filters.append({filter_column + '__' + op: filter_value})
+                mutated_filters.append({filter_column + '__' + op: filter_value})
 
             # TODO: currently only handles filters with single column queries
             # e.g. username='alice'. Ideally, this would handle filters over
             # multiple columns e.g. find the transfers of more than 10 zoobars 
             # to alice recipient='alice' && zoobars > 10
             #break
-            return self.create_mutated_querysets(mutation_filters, *args) 
+            return self._create_mutated_querysets(mutated_filters, *args) 
 
             #mutations.append(mutation_set)
 
         return mutations
 
-    def create_mutated_querysets(self, mutation_filters, *args):
+    def _create_mutated_querysets(self, mutated_filters, *args):
         mutations = []
-        for filter_kv in mutation_filters:
+        for filter_kv in mutated_filters:
             mutated_queryset = self._apply_filter(*args, **filter_kv)
             mutations.append(mutated_queryset)
+        return mutations
 
-    def remove_live_mutations(self, original_queryset, mutations):
+    def remove_dead_mutations(self, original_queryset, mutations):
         unique_mutations = [m for m in mutations if original_queryset != m]
         return unique_mutations
 

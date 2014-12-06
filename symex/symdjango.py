@@ -127,7 +127,7 @@ def newget(self, *args, **kwargs):
       notdict[e] = True
   return oldget(self, *args, **kwargs)
 
-django.db.models.QuerySet.get = newget
+#django.db.models.QuerySet.get = newget
 
 # It's only safe to use SymDjango as a singleton!
 class SymDjango():
