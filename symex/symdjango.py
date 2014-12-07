@@ -87,8 +87,21 @@ patcher.start()
 import django.db.models.query
 from django.db.models import Model
 
+def is_version_1_8():
+  return django.VERSION[0] == 1 and django.VERSION[1] == 8
+
+def is_version_1_6():
+  return django.VERSION[0] == 1 and django.VERSION[1] == 6
+
 notdict = {}
-oldget = django.db.models.QuerySet.get
+#import pdb; pdb.set_trace()
+
+if is_version_1_8():
+  qs = django.db.models.QuerySet 
+else:
+  qs = django.db.models.query.QuerySet
+
+oldget = qs.get
 def newget(self, *args, **kwargs):
   import django.contrib.sessions.models
   if self.model is not django.contrib.sessions.models.Session:
@@ -127,7 +140,7 @@ def newget(self, *args, **kwargs):
       notdict[e] = True
   return oldget(self, *args, **kwargs)
 
-django.db.models.QuerySet.get = newget
+qs.get = newget
 
 # It's only safe to use SymDjango as a singleton!
 class SymDjango():
@@ -143,7 +156,9 @@ class SymDjango():
         os.environ.update({
             "DJANGO_SETTINGS_MODULE": settings
         })
-        django.setup()
+
+        if is_version_1_8():
+          django.setup()
 
     def setup_models(self, models):
         from symqueryset import SymManager

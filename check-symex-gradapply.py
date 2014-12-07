@@ -17,10 +17,13 @@ import symex.rewriter as rewriter
 
 importwrapper.rewrite_imports(rewriter.rewriter)
 
+settings = "settings.eecs"
+os.environ.update({
+  "DJANGO_SETTINGS_MODULE": settings
+})
 from symex.symdjango import SymDjango, post_data
 import symex.symeval
 
-settings = "settings.eecs"
 appviews = {
 	"apply.main.main": (lambda p: p == "/"),
 	"apply.main.main": (lambda p: p == "apply/"),
