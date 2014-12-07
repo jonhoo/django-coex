@@ -94,7 +94,6 @@ def is_version_1_6():
   return django.VERSION[0] == 1 and django.VERSION[1] == 6
 
 notdict = {}
-#import pdb; pdb.set_trace()
 
 if is_version_1_8():
   qs = django.db.models.QuerySet 
