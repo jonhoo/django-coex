@@ -134,8 +134,8 @@ def newget(self, *args, **kwargs):
         notdict[e] = True
     else:
       e = "newget: multi-key lookups not yet supported: %s" % kwargs
-      if e not in notdict:
-        print(e)
+      #if e not in notdict:
+        #print(e)
       notdict[e] = True
   return oldget(self, *args, **kwargs)
 

@@ -16,7 +16,8 @@ import symex.importwrapper as importwrapper
 import symex.rewriter as rewriter
 
 importwrapper.rewrite_imports(rewriter.rewriter)
-
+import sys
+sys.path.append("../gradapply")
 settings = "settings.eecs"
 os.environ.update({
   "DJANGO_SETTINGS_MODULE": settings
@@ -47,13 +48,14 @@ from django.test.utils import setup_test_environment
 import apply
 
 # TODO(jon): This currently only test single-request actions
-class ConcolicTestCase(TestCase):
-  fixtures = ['../gradapply/apply/fixtures/testdb/login_user', '../gradapply/apply/fixtures/testdb/login_conf', '../gradapply/apply/fixtures/testdb/review_reader']
+from django.core.management import call_command
+class ConcolicTestCase():
+  fixtures = ['../gradapply/apply/fixtures/testdb/login_user.xml', '../gradapply/apply/fixtures/testdb/login_conf.xml', '../gradapply/apply/fixtures/testdb/review_reader.xml']
   
-  def runTest(self):
-    return
-   
   def test_stuff(self):
+    call_command('loaddata', self.fixtures[0], verbosity=0)
+    call_command('loaddata', self.fixtures[1], verbosity=0)
+    call_command('loaddata', self.fixtures[2], verbosity=0)
     method = fuzzy.mk_str('method')
     if not method == 'get' and not method == 'post':
       return
@@ -66,7 +68,9 @@ class ConcolicTestCase(TestCase):
     ## concolic values for both REQUEST_METHOD and PATH_INFO, but then
     ## zoobar generates around 2000 distinct paths, and that takes many
     ## minutes to check.
-    path = 'apply/'
+    path = fuzzy.mk_str('path') + '/'
+    if path[0] == ';':
+      return
     if path[0] == '/':
       return
 
@@ -94,8 +98,10 @@ class ConcolicTestCase(TestCase):
     else:
       if verbose > 0:
         print('==> accessing %s anonymously' % path)
-    if (not ok):
-      print(" Loggin unsuccessful")
+    if (logged_in and ok):
+      print(" Login successful") 
+    if (logged_in and not ok):
+      print(" Login unsuccesful")
     response = None
     if method == 'get':
       response = req.get(path)
@@ -153,5 +159,6 @@ setup_test_environment()
 
 from django.test.simple import DjangoTestSuiteRunner
 DjangoTestSuiteRunner().setup_databases()
-test_case = ConcolicTestCase()
-fuzzy.concolic_test(test_case.test_stuff, maxiter=2000, verbose=verbose)
+print "Finished setting up database"
+concolic_test = ConcolicTestCase()
+fuzzy.concolic_test(concolic_test.test_stuff, maxiter=2000, verbose=verbose)
