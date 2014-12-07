@@ -11,9 +11,9 @@ from mock import patch
 import importlib
 
 # use our Django (currently irrelevant)
-ourdjango = os.path.dirname(os.path.abspath(__file__)) + '/../../django-concolic'
-if ourdjango not in sys.path:
-    sys.path.insert(1, ourdjango)
+#ourdjango = os.path.dirname(os.path.abspath(__file__)) + '/../../django-concolic'
+#if ourdjango not in sys.path:
+    #sys.path.insert(1, ourdjango)
 
 # Mock out force_str and relatives
 from django.utils.encoding import force_bytes
