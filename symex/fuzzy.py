@@ -704,16 +704,16 @@ class InputQueue(object):
 
 concrete_values = {}
 
-def mk_int(id):
+def mk_int(id, value = 0):
   global concrete_values
   if id not in concrete_values:
-    concrete_values[id] = 0
+    concrete_values[id] = value 
   return concolic_int(sym_int(id), concrete_values[id])
 
-def mk_str(id):
+def mk_str(id, value = ''):
   global concrete_values
   if id not in concrete_values:
-    concrete_values[id] = ''
+    concrete_values[id] = value 
   return concolic_str(sym_str(id), concrete_values[id])
 
 def concolic_test(testfunc, maxiter = 100, verbose = 0,

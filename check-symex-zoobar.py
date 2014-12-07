@@ -34,7 +34,12 @@ d = SymDjango(settings, os.path.abspath(os.path.dirname(__file__) + '/app'), app
 
 from zapp.models import Person, Transfer
 from django.contrib.auth.models import User
-d.setup_models([User, Person, Transfer])
+from symex.symqueryset import AllSymQuerySet, SQLSymQuerySet
+d.setup_models([
+  {'model': User, 'queryset': AllSymQuerySet},
+  {'model': Person, 'queryset': AllSymQuerySet},
+  {'model': Transfer, 'queryset': AllSymQuerySet}
+])
 
 # Only safe to load now that it's been patched and added to import path
 import zoobar

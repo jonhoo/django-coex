@@ -127,7 +127,7 @@ def newget(self, *args, **kwargs):
       notdict[e] = True
   return oldget(self, *args, **kwargs)
 
-django.db.models.QuerySet.get = newget
+#django.db.models.QuerySet.get = newget
 
 # It's only safe to use SymDjango as a singleton!
 class SymDjango():
@@ -150,9 +150,9 @@ class SymDjango():
 
     # This could patch every model used by django, but we are really only
     # interested in the application's models (it's also less expensive)
-    for model in models:
-      __objects = model.objects
-      model.objects = SymManager(__objects)
+    for m in models:
+      __objects = m['model'].objects
+      m['model'].objects = SymManager(__objects, m['queryset'])
 
   def new(self):
     return SymClient(self, SERVER_NAME='concolic.io')
