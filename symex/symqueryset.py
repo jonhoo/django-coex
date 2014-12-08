@@ -90,30 +90,41 @@ class SQLSymQuerySet(QuerySet, SymMixin):
       obj = None
       for field in unique:
         if field.name in kwargs:
-          #newkwargs = {field.name: kwargs[field.name]}
-          #obj = self._old_get(SQLSymQuerySet, *args, **newkwargs)
-          if obj is not None:
+          newkwargs = {field.name: kwargs[field.name]}
+          try:
+            obj = self._old_get(SQLSymQuerySet, *args, **newkwargs)
             break
+          except self.model.DoesNotExist:
+            pass
 
       if obj is None: 
         obj = self.model()
-        obj.save()
         setattr(obj, self.model._meta.pk.name, hash(str(self._id)))
         self._id = self._id + 1
+        obj.save()
 
       for arg in kwargs:
         if arg != self.model._meta.pk.name:
-          setattr(obj, arg, kwargs[arg])
+          obj = self._set_attr(obj, arg, kwargs[arg])
 
       try:
+        obj.save()
         print obj
         print self.all()
-        obj.save()
       except IntegrityError:
         raise self.model.DoesNotExist()
 
     obj = self._make_fields_concolic(query_id, obj)
     return obj 
+
+  def _set_attr(self, obj, key, value):
+    if not isinstance(key, str) or not '__' in key:
+      setattr(obj, key, value)
+      return obj
+
+    keys = str.split(key, '__', 1)
+    setattr(obj, keys[0], self._set_attr(getattr(obj, keys[0]), keys[1], value))
+    return obj
 
   def _get_unique_fields(self):
     return [f for f in self.model._meta.fields if f.unique]
