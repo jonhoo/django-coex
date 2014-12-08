@@ -9,12 +9,14 @@ verbose = 1
 
 import os
 import re
+import sys
 import symex.fuzzy as fuzzy
 import __builtin__
 import inspect
 
 import sys
 sys.path.append("../gradapply")
+
 settings = "settings.eecs"
 os.environ.update({
   "DJANGO_SETTINGS_MODULE": settings
@@ -48,6 +50,7 @@ from django.test import TestCase
 from django.test.utils import setup_test_environment
 # Only safe to load now that it's been patched and added to import path
 import apply
+
 
 # TODO(jon): This currently only test single-request actions
 from django.core.management import call_command
@@ -147,3 +150,4 @@ fuzzy.concolic_test(concolic_test.test_stuff, maxiter=2000, v=verbose,
                     usecexcache = True)
 
 DjangoTestSuiteRunner().teardown_databases(olddb)
+
