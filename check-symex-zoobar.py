@@ -12,28 +12,41 @@ import re
 import symex.fuzzy as fuzzy
 import __builtin__
 import inspect
-import symex.importwrapper as importwrapper
-import symex.rewriter as rewriter
 
-importwrapper.rewrite_imports(rewriter.rewriter)
+# NOTE(jon): This needs to come before we start the rewriter
+cov = None
+import sys
+if len(sys.argv) > 1 and sys.argv[-1] == '-c':
+  from coverage import coverage
+  cov = True
 
 from symex.symdjango import SymDjango, post_data
 import symex.symeval
 
 settings = "zoobar.settings"
 appviews = { 
-	"zapp.views.index": (lambda p: p == "/"),
-        "zapp.views.users": (lambda p: p == "users/"),
-        "zapp.views.transfer": (lambda p: p == "transfer/"),    
-        "zlogio.views.login": (lambda p: p == "accounts/login/"),
-	"zlogio.views.logout": (lambda p: p == "accounts/logout/")
-}
+    "zapp.views.index": (lambda p: p == "/"),
+    "zapp.views.users": (lambda p: p == "users/"),
+    "zapp.views.transfer": (lambda p: p == "transfer/"),
+    "zlogio.views.login": (lambda p: p == "accounts/login/"),
+    "zlogio.views.logout": (lambda p: p == "accounts/logout/")
+    #"url.parameter.example": (lambda p: (p == "/", {name: "this"}))
+    }
 
-d = SymDjango(settings, os.path.abspath(os.path.dirname(__file__) + './app'), appviews)
+appdir = os.path.abspath(os.path.dirname(__file__) + '/app')
+d = SymDjango(settings, appdir, appviews)
+
+if cov is not None:
+  cov = coverage(auto_data = True, source = [os.path.realpath(appdir)])
 
 from zapp.models import Person, Transfer
 from django.contrib.auth.models import User
-d.setup_models([User, Person, Transfer])
+from symex.symqueryset import AllSymQuerySet, SQLSymQuerySet
+d.setup_models([
+  {'model': User, 'queryset': AllSymQuerySet},
+  {'model': Person, 'queryset': AllSymQuerySet},
+  {'model': Transfer, 'queryset': AllSymQuerySet}
+])
 
 # Only safe to load now that it's been patched and added to import path
 import zoobar
@@ -90,24 +103,31 @@ def test_stuff():
   logged_in = False
   user = fuzzy.mk_str('user')
   if user == 'alice' or user == 'bob':
-      if verbose > 0:
-        print('==> accessing %s as %s' % (path, user))
+    if verbose > 0:
+      print('==> accessing %s as %s' % (path, user))
 
-      if user == 'alice':
-          req.login(username='alice', password='password')
-      elif user == 'bob':
-          req.login(username='bob', password='password')
+    if user == 'alice':
+      req.login(username='alice', password='password')
+    elif user == 'bob':
+      req.login(username='bob', password='password')
 
-      logged_in = True
+    logged_in = True
   else:
-      if verbose > 0:
-        print('==> accessing %s anonymously' % path)
- 
+    if verbose > 0:
+      print('==> accessing %s anonymously' % path)
+
+  if cov is not None:
+    cov.start()
+
   response = None
   if method == 'get':
     response = req.get(path)
   elif method == 'post':
     response = req.post(path, data=data)
+
+  if cov is not None:
+    cov.stop()
+    cov.save()
 
   if verbose == 1 and response.status_code == 404:
     print(" -> 404 not found...")
@@ -118,7 +138,7 @@ def test_stuff():
       response.status_code,
       response.reason_phrase,
       response.items())
-      )
+    )
 
   if verbose > 2 or response.status_code == 500:
     print(80 * "-")
@@ -126,21 +146,23 @@ def test_stuff():
     print(80 * "-")
 
   if logged_in and path == "transfer/":
+    if verbose > 0:
       if "Log out" in response.content:
-          print(" -> login works. that's nice.")
+        print(" -> login works. that's nice.")
       else:
-          print(" -> login doesn't work :(")
+        print(" -> login doesn't work :(")
 
-      if method == "post":
-        if "warning" in response.content:
+    if method == "post":
+      if "warning" in response.content:
+        if verbose > 0:
           # success is also notified using a warning span
           wtext = re.search('<span class="warning">([^<]*)</span>', response.content).group(1)
           print(" -> transfer warning: %s" % wtext)
-        else:
-          print(" -> NO TRANSFER WARNING?!")
-          print(80 * "-")
-          print(re.sub("^", "\t", response.content))
-          print(80 * "-")
+      else:
+        print(" -> NO TRANSFER WARNING?!")
+        print(80 * "-")
+        print(re.sub("^", "\t", response.content))
+        print(80 * "-")
 
   if User.objects.all().count() == 2:
     balance2 = sum([u.person.zoobars for u in User.objects.all()])
@@ -157,4 +179,9 @@ def test_stuff():
         # requests, and which user the request was issued as, but this seems
         # outside the scope of the exercise?
 
-fuzzy.concolic_test(test_stuff, maxiter=2000, verbose=verbose)
+fuzzy.concolic_test(test_stuff, maxiter=2000, v=verbose)
+
+if cov is not None:
+  print "Coverage report stored in covhtml/"
+  cov.html_report(directory = 'covhtml')
+  os.remove('.coverage')

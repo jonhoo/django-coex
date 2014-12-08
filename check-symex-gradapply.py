@@ -9,13 +9,20 @@ verbose = 1
 
 import os
 import re
+import sys
 import symex.fuzzy as fuzzy
 import __builtin__
 import inspect
 import symex.importwrapper as importwrapper
 import symex.rewriter as rewriter
 
+
 importwrapper.rewrite_imports(rewriter.rewriter)
+
+def info(type, value, tb):
+  print type
+  import pdb; pdb.set_trace()
+sys.excepthook = info
 
 settings = "settings.eecs"
 os.environ.update({

@@ -473,6 +473,9 @@ class concolic_int(int):
     self.__sym = sym
     return self
 
+  def concrete_value(self):
+    return self.__v
+
   def __eq__(self, o):
     if not isinstance(o, int):
       return False
@@ -650,7 +653,7 @@ class InputQueue(object):
     ## input also has a priority (lower is "more important"), which
     ## is useful when there's too many inputs to process.
     self.inputs = Queue.PriorityQueue()
-    self.inputs.put((0, {}))
+    self.inputs.put((0, {'values': {}, 'path_condition': None}))
     self.input_history = []
 
     ## "branchcount" is a map from call site (filename and line number)
@@ -663,17 +666,18 @@ class InputQueue(object):
 
   def get(self):
     (prio, values) = self.inputs.get()
-    return values
+    return (values['values'], values['path_condition'])
 
-  def add(self, new_values, caller, uniqueinputs = False):
+  def add(self, new_values, caller, path_condition, uniqueinputs = False):
     if uniqueinputs:
       if self.check_input_history(new_values):
-        print "SKIPPING INPUT"
+        if verbose > 1:
+          print "SKIPPING INPUT"
         return
 
     prio = self.branchcount[caller[0]]
     self.branchcount[caller[0]] += 1
-    self.inputs.put((prio, new_values))
+    self.inputs.put((prio, {'values': new_values, 'path_condition': path_condition}))
 
     if uniqueinputs:
       self.input_history.append((prio, new_values))
@@ -701,22 +705,26 @@ class InputQueue(object):
 
 concrete_values = {}
 
-def mk_int(id):
+def mk_int(id, value = 0):
   global concrete_values
   if id not in concrete_values:
-    concrete_values[id] = 0
+    concrete_values[id] = value 
   return concolic_int(sym_int(id), concrete_values[id])
 
-def mk_str(id):
+def mk_str(id, value = ''):
   global concrete_values
   if id not in concrete_values:
-    concrete_values[id] = ''
+    concrete_values[id] = value 
   return concolic_str(sym_str(id), concrete_values[id])
 
-def concolic_test(testfunc, maxiter = 100, verbose = 0,
+verbose = 0
+def concolic_test(testfunc, maxiter = 100, v = 0,
                   uniqueinputs = True,
                   removeredundant = True,
                   usecexcache = True):
+  # globally available 'verbose' flag
+  verbose = v
+
   ## "checked" is the set of constraints we already sent to Z3 for
   ## checking.  use this to eliminate duplicate paths.
   checked_paths = set()
@@ -734,7 +742,8 @@ def concolic_test(testfunc, maxiter = 100, verbose = 0,
     iter += 1
 
     global concrete_values
-    concrete_values = inputs.get()
+    global path_condition
+    (concrete_values, path_condition) = inputs.get()
 
     global cur_path_constr, cur_path_constr_callers
     cur_path_constr = []
@@ -784,7 +793,8 @@ def concolic_test(testfunc, maxiter = 100, verbose = 0,
       if usecexcache:
         (ok, model) = check_cache(new_path_condition, cexcache)
       if ok != None:
-        print "USED CEXCACHE"
+        if verbose > 1:
+          print "USED CEXCACHE"
       else:
         (ok, model) = fork_and_check(new_path_condition)
       checked_paths.add(new_path_condition)
@@ -796,7 +806,7 @@ def concolic_test(testfunc, maxiter = 100, verbose = 0,
         for k in model:
           if k in concrete_values:
             new_values[k] = model[k]
-        inputs.add(new_values, caller, uniqueinputs)
+        inputs.add(new_values, caller, new_path_condition, uniqueinputs)
         if usecexcache:
           cexcache[new_path_condition] = new_values
       else:
