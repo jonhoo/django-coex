@@ -100,44 +100,6 @@ if is_version_1_8():
 else:
   qs = django.db.models.query.QuerySet
 
-#oldget = qs.get
-#def newget(self, *args, **kwargs):
-  #import django.contrib.sessions.models
-  #if self.model is not django.contrib.sessions.models.Session:
-    #if len(kwargs) == 1:
-      #key = kwargs.keys()[0]
-      #if '_' not in key:
-        #if key == 'pk':
-          #key = self.model._meta.pk.name
-          #kwargs[key] = kwargs['pk']
-          #del kwargs['pk']
-
-        #for m in self.model.objects.all():
-          #v = kwargs[key]
-
-          ## support model attribute passthrough
-          #if isinstance(v, Model) and hasattr(v, key):
-            #v = getattr(v, key)
-
-          #if getattr(m, key) == v:
-            #real = oldget(self, *args, **kwargs)
-            #assert m == real
-            #return m
-
-        ## this should raise an exception, or we've done something wrong
-        #oldget(self, *args, **kwargs)
-        #assert False
-      #else:
-        #e = "newget: special keys like %s not yet supported" % key
-        #if e not in notdict:
-          #print(e)
-        #notdict[e] = True
-    #else:
-      #e = "newget: multi-key lookups not yet supported: %s" % kwargs
-      #if e not in notdict:
-        #print(e)
-      #notdict[e] = True
-  #return oldget(self, *args, **kwargs)
 
 import symex.symqueryset
 #qs.get = symex.symqueryset.AllSymQuerySet.get
@@ -176,13 +138,6 @@ class SymDjango():
     __objects = User.objects
     User.objects = SymManager(__objects, AllSymQuerySet)
 
-    #from symqueryset import SymManager
-
-    ## This could patch every model used by django, but we are really only
-    ## interested in the application's models (it's also less expensive)
-    #for m in models:
-      #__objects = m['model'].objects
-      #m['model'].objects = SymManager(__objects, m['queryset'])
 
   def new(self):
     return SymClient(self, SERVER_NAME='concolic.io')
