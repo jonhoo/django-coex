@@ -37,26 +37,6 @@ class SQLSymQuerySet(QuerySet, SymMixin):
     if self.model is django.contrib.sessions.models.Session or len(kwargs) != 1:
       return self._old_get(SQLSymQuerySet, *args, **kwargs)
 
-    #key = kwargs.keys()[0]
-    #if '_' in key:
-      #return self._old_get(*args, **kwargs)
-    
-    #if key == 'pk':
-      #key = self.model._meta.pk.name
-      #kwargs[key] = kwargs['pk']
-      #del kwargs['pk']
-
-    ##m = self._get_random_object()
-    #for m in self.model.objects.all():
-      #v = kwargs[key]
-
-      ## support model attribute passthrough
-      #if isinstance(v, Model) and hasattr(v, key):
-        #v = getattr(v, key)
-
-      #if getattr(m, key) == v:
-        #pass
-
     # If this query has already been called, some or all of its object's 
     # properties may be symbolic and have constraints
     query_id = self._create_query_id()
