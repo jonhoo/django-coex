@@ -318,35 +318,71 @@ class MutationSymQuerySet(QuerySet, SymMixin):
 
 # SymQuerySet that just iterates through every row in the DB
 class AllSymQuerySet(QuerySet, SymMixin):
+  def _convert_pk(self, **kwargs):
+    for key in kwargs:
+      if key != 'pk':
+        continue
+
+      newkey = self.model._meta.pk.name
+      kwargs[newkey] = kwargs['pk']
+      del kwargs['pk']
+
+    return kwargs
+
+  def _is_match(self, real, obj, **kwargs):
+    for key in kwargs:
+      value = kwargs[key]
+
+      lookups, parts, reffed_aggregate = self.query.solve_lookup_type(key)
+
+      self._create_branch(value, obj, lookups, parts)
+    
+    if obj == real:
+      return True
+
+    return False
+
+  def _create_branch(self, value, obj, lookup, props):
+    if len(lookup) != 1:
+      return
+
+    obj_attr = self._get_attr(obj, props)
+
+    op = lookup[0]
+    if op == 'gt' and obj_attr > value:
+      pass
+    if op == 'gte' and obj_attr >= value:
+      pass
+    if op == 'lt' and obj_attr < value:
+      pass
+    if op == 'lte' and obj_attr <= value:
+      pass
+    if op == 'exact' and obj_attr == value:
+      pass
+
+  def _get_attr(self, obj, props):
+    result = obj
+    for prop in props:
+      if hasattr(obj, prop):
+        result = getattr(obj, prop)
+    return result
+
   def get(self, *args, **kwargs):
     import django.contrib.sessions.models
-    if self.model is django.contrib.sessions.models.Session or len(kwargs) != 1:
+    if self.model is django.contrib.sessions.models.Session:
       return self._old_get(AllSymQuerySet, *args, **kwargs)
 
-    key = kwargs.keys()[0]
-    if '_' not in key:
-      if key == 'pk':
-        key = self.model._meta.pk.name
-        kwargs[key] = kwargs['pk']
-        del kwargs['pk']
+    kwargs = self._convert_pk(**kwargs)
 
-      for m in self.model.objects.all():
-        value = kwargs[key]
+    real = None
+    try:
+      real = self._old_get(AllSymQuerySet, *args, **kwargs)
+    except self.model.DoesNotExist:
+      pass
 
-        # support model attribute passthrough
-        if isinstance(value, Model) and hasattr(value, key):
-          value = getattr(value, key)
-
-        if getattr(m, key) == value:
-          real = self._old_get(AllSymQuerySet, *args, **kwargs)
-          assert m == real
-          return m
-
-      # this should raise an exception, or we've done something wrong
-      self._old_get(AllSymQuerySet, *args, **kwargs)
-      assert False
-    else:
-      e = "newget: special keys like %s not yet supported" % key
+    for m in self.model.objects.all():
+      if self._is_match(real, m, **kwargs):
+        return m
 
     return self._old_get(AllSymQuerySet, *args, **kwargs)
 
