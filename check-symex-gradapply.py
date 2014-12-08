@@ -12,10 +12,7 @@ import re
 import symex.fuzzy as fuzzy
 import __builtin__
 import inspect
-import symex.importwrapper as importwrapper
-import symex.rewriter as rewriter
 
-importwrapper.rewrite_imports(rewriter.rewriter)
 import sys
 sys.path.append("../gradapply")
 settings = "settings.eecs"
@@ -25,18 +22,23 @@ os.environ.update({
 from symex.symdjango import SymDjango, post_data
 import symex.symeval
 
+paths = ["/", "apply/", "review/", "apply/login/"]
 appviews = {
 	"apply.main.main": (lambda p: p == "/"),
-	"apply.main.main": (lambda p: p == "apply/"),
-	"apply.submit.submit": (lambda p: p == "apply/submit/"),
-	"apply.receipt.receipt": (lambda p: p == "apply/receipt/"),
-	"apply.submit.submit": (lambda p: p == "apply/csr/"),
-	"apply.submit.notify1": (lambda p: p == "apply/csr-notify1/"),
-	"apply.submit.notify2": (lambda p: p == "apply/csr-notify2/"),
-        "apply.recommenders.recommeders": (lambda p: p == "apply/page/recommenders/"),
-	"apply.subjects.subjects": (lambda p: p == "apply/page/subjects/"),
-	"apply.recs.recrequest": (lambda p: p == "apply/page/recrequest/"),
-	"apply.attended.attended": (lambda p: p == "apply/page/attended/"),
+	"apply.main.main": (lambda p: p == "apply/"), 
+	"apply.readers_folderlist.list_assignedfolders" : (lambda p: p == "review/"), 
+        "apply.login.applylogin" : (lambda p : p == "apply/login/"),
+        "apply.help.help": (lambda p: p == "apply/help/"),
+	"apply.recs.recrequest": (lambda p: p == "apply/page/recrequest/")
+        #"apply.submit.submit": (lambda p: p == "apply/submit/"),
+	#"apply.receipt.receipt": (lambda p: p == "apply/receipt/"),
+	#"apply.submit.submit": (lambda p: p == "apply/csr/"),
+	#"apply.submit.notify1": (lambda p: p == "apply/csr-notify1/"),
+	#"apply.submit.notify2": (lambda p: p == "apply/csr-notify2/"),
+        #"apply.recommenders.recommenders": (lambda p: p == "apply/page/recommenders/"),
+	#"apply.subjects.subjects": (lambda p: p == "apply/page/subjects/"),
+	#"apply.recs.recrequest": (lambda p: p == "apply/page/recrequest/"),
+	#"apply.attended.attended": (lambda p: p == "apply/page/attended/"),
 	#TODO: add more
 }
 
@@ -53,9 +55,9 @@ class ConcolicTestCase():
   fixtures = ['../gradapply/apply/fixtures/testdb/login_user.xml', '../gradapply/apply/fixtures/testdb/login_conf.xml', '../gradapply/apply/fixtures/testdb/review_reader.xml']
   
   def test_stuff(self):
-    call_command('loaddata', self.fixtures[0], verbosity=0)
-    call_command('loaddata', self.fixtures[1], verbosity=0)
-    call_command('loaddata', self.fixtures[2], verbosity=0)
+    for fixture in self.fixtures:
+      call_command('loaddata', fixture, verbosity=0)
+    
     method = fuzzy.mk_str('method')
     if not method == 'get' and not method == 'post':
       return
@@ -69,18 +71,27 @@ class ConcolicTestCase():
     ## zoobar generates around 2000 distinct paths, and that takes many
     ## minutes to check.
     path = fuzzy.mk_str('path') + '/'
-    if path[0] == ';':
-      return
-    if path[0] == '/':
+
+    if not path in paths:
       return
 
     data = {}
-    '''if method == 'post':
-      if path == 'transfer/':
-        data = post_data(
-          zoobars = fuzzy.mk_int('transfer.zoobars'),
-          recipient = fuzzy.mk_str('transfer.recipient')
-        )'''
+    if method == 'post':
+      if path == 'apply/login/':
+        choice = fuzzy.mk_int("login_choice")
+	if choice == 0: #register
+          pwd = fuzzy.mk_str('apply.login.password')
+          data = post_data(
+            username = fuzzy.mk_str('apply.login.username'),
+            password1 = pwd,
+            password2 = pwd,
+            create = ''
+          )
+        else: #login
+          data = post_data(
+            username = fuzzy.mk_str('apply.login.username'),
+            password = fuzzy.mk_str('apply.login.password')
+          )
 
     logged_in = False
     ok = True
@@ -124,41 +135,15 @@ class ConcolicTestCase():
       print(re.sub("^", "\t", response.content))
       print(80 * "-")
 
-    if logged_in and path == "transfer/":
-      if "Log out" in response.content:
-        print(" -> login works. that's nice.")
-      else:
-        print(" -> login doesn't work :(")
-
-      if method == "post":
-        if "warning" in response.content:
-          # success is also notified using a warning span
-          wtext = re.search('<span class="warning">([^<]*)</span>', response.content).group(1)
-          print(" -> transfer warning: %s" % wtext)
-        else:
-          print(" -> NO TRANSFER WARNING?!")
-          print(80 * "-")
-          print(re.sub("^", "\t", response.content))
-          print(80 * "-")
-
-    '''if User.objects.all().count() == 2:
-      balance2 = sum([u.person.zoobars for u in User.objects.all()])
-      if balance1 != balance2:
-        report_balance_mismatch()
-
-    utransfers = [t.sender.user.username for t in Transfer.objects.all()]
-    for p in User.objects.all():
-      if p.username not in utransfers:
-        if p.person.zoobars < 10:
-          report_zoobar_theft()
-          # technically, this check could be fooled if an attacker could insert
-          # rows into the transfer db. Instead, we should keep a log of all
-          # requests, and which user the request was issued as, but this seems
-          # outside the scope of the exercise?'''
 setup_test_environment()
 
 from django.test.simple import DjangoTestSuiteRunner
-DjangoTestSuiteRunner().setup_databases()
+olddb = DjangoTestSuiteRunner().setup_databases()
 print "Finished setting up database"
 concolic_test = ConcolicTestCase()
-fuzzy.concolic_test(concolic_test.test_stuff, maxiter=2000, verbose=verbose)
+fuzzy.concolic_test(concolic_test.test_stuff, maxiter=2000, v=verbose,
+                    uniqueinputs = True,
+                    removeredundant = True,
+                    usecexcache = True)
+
+DjangoTestSuiteRunner().teardown_databases(olddb)
