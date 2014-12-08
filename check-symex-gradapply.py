@@ -9,6 +9,7 @@ verbose = 1
 
 import os
 import re
+import sys
 import symex.fuzzy as fuzzy
 import __builtin__
 import inspect
@@ -16,6 +17,7 @@ import symex.importwrapper as importwrapper
 import symex.rewriter as rewriter
 
 importwrapper.rewrite_imports(rewriter.rewriter)
+
 
 settings = "settings.eecs"
 os.environ.update({
@@ -45,6 +47,7 @@ from django.test import TestCase
 from django.test.utils import setup_test_environment
 # Only safe to load now that it's been patched and added to import path
 import apply
+
 
 # TODO(jon): This currently only test single-request actions
 class ConcolicTestCase(TestCase):
@@ -151,7 +154,8 @@ class ConcolicTestCase(TestCase):
           # outside the scope of the exercise?'''
 setup_test_environment()
 
-from django.test.simple import DjangoTestSuiteRunner
-DjangoTestSuiteRunner().setup_databases()
+from django.test.runner import DiscoverRunner
+DiscoverRunner().setup_databases()
 test_case = ConcolicTestCase()
-fuzzy.concolic_test(test_case.test_stuff, maxiter=2000, verbose=verbose)
+d.setup_models()
+fuzzy.concolic_test(test_case.test_stuff, maxiter=2000, v=verbose)
