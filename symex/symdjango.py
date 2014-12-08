@@ -204,7 +204,7 @@ class SymResolver():
       if r is not None:
         return r
 
-      raise Resolver404({'path': path})
+    raise Resolver404({'path': path})
 
   def _reverse_with_prefix(self, v, _prefix, *args, **kwargs):
     return "<reverse: %s>" % v
