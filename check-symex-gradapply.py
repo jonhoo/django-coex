@@ -22,7 +22,7 @@ os.environ.update({
 from symex.symdjango import SymDjango, post_data
 import symex.symeval
 
-paths = ["/", "apply/", "review/", "apply/login/"]
+paths = ["/", "apply/", "review/", "apply/login/", "apply/help/", "apply/page/recrequest"]
 appviews = {
 	"apply.main.main": (lambda p: p == "/"),
 	"apply.main.main": (lambda p: p == "apply/"), 
