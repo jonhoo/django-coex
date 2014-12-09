@@ -106,12 +106,12 @@ def test_stuff():
     if verbose > 0:
       print('==> accessing %s as %s' % (path, user))
 
-      if user == 'alice':
-        req.login(username='alice', password='password')
-      elif user == 'bob':
-        req.login(username='bob', password='password')
+    if user == 'alice':
+      req.login(username='alice', password='password')
+    elif user == 'bob':
+      req.login(username='bob', password='password')
 
-      logged_in = True
+    logged_in = True
   else:
     if verbose > 0:
       print('==> accessing %s anonymously' % path)
