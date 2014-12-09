@@ -15,6 +15,13 @@ import inspect
 import symex.importwrapper as importwrapper
 import symex.rewriter as rewriter
 
+# NOTE(jon): This needs to come before we start the rewriter
+cov = None
+import sys
+if len(sys.argv) > 1 and sys.argv[-1] == '-c':
+  from coverage import coverage
+  cov = True
+
 importwrapper.rewrite_imports(rewriter.rewriter)
 
 from symex.symdjango import SymDjango, post_data
@@ -30,7 +37,11 @@ appviews = {
     #"url.parameter.example": (lambda p: (p == "/", {name: "this"}))
     }
 
-d = SymDjango(settings, os.path.abspath(os.path.dirname(__file__) + '/app'), appviews)
+appdir = os.path.abspath(os.path.dirname(__file__) + '/app')
+d = SymDjango(settings, appdir, appviews)
+
+if cov is not None:
+  cov = coverage(auto_data = True, source = [os.path.realpath(appdir)])
 
 from zapp.models import Person, Transfer
 from django.contrib.auth.models import User
@@ -109,11 +120,18 @@ def test_stuff():
     if verbose > 0:
       print('==> accessing %s anonymously' % path)
 
+  if cov is not None:
+    cov.start()
+
   response = None
   if method == 'get':
     response = req.get(path)
   elif method == 'post':
     response = req.post(path, data=data)
+
+  if cov is not None:
+    cov.stop()
+    cov.save()
 
   if verbose == 1 and response.status_code == 404:
     print(" -> 404 not found...")
@@ -164,3 +182,8 @@ def test_stuff():
         # outside the scope of the exercise?
 
 fuzzy.concolic_test(test_stuff, maxiter=2000, verbose=verbose)
+
+if cov is not None:
+  print "Coverage report stored in covhtml/"
+  cov.html_report(directory = 'covhtml')
+  os.remove('.coverage')

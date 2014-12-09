@@ -2,3 +2,5 @@
 /*.log
 /app
 /result.html
+/covhtml
+/.coverage
