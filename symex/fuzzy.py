@@ -671,7 +671,8 @@ class InputQueue(object):
   def add(self, new_values, caller, path_condition, uniqueinputs = False):
     if uniqueinputs:
       if self.check_input_history(new_values):
-        print "SKIPPING INPUT"
+        if verbose > 1:
+          print "SKIPPING INPUT"
         return
 
     prio = self.branchcount[caller[0]]
@@ -716,10 +717,14 @@ def mk_str(id, value = ''):
     concrete_values[id] = value 
   return concolic_str(sym_str(id), concrete_values[id])
 
-def concolic_test(testfunc, maxiter = 100, verbose = 0,
+verbose = 0
+def concolic_test(testfunc, maxiter = 100, v = 0,
                   uniqueinputs = True,
                   removeredundant = True,
                   usecexcache = True):
+  # globally available 'verbose' flag
+  verbose = v
+
   ## "checked" is the set of constraints we already sent to Z3 for
   ## checking.  use this to eliminate duplicate paths.
   checked_paths = set()
@@ -788,7 +793,8 @@ def concolic_test(testfunc, maxiter = 100, verbose = 0,
       if usecexcache:
         (ok, model) = check_cache(new_path_condition, cexcache)
       if ok != None:
-        print "USED CEXCACHE"
+        if verbose > 1:
+          print "USED CEXCACHE"
       else:
         (ok, model) = fork_and_check(new_path_condition)
       checked_paths.add(new_path_condition)

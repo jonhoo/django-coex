@@ -146,16 +146,18 @@ def test_stuff():
     print(80 * "-")
 
   if logged_in and path == "transfer/":
-    if "Log out" in response.content:
-      print(" -> login works. that's nice.")
-    else:
-      print(" -> login doesn't work :(")
+    if verbose > 0:
+      if "Log out" in response.content:
+        print(" -> login works. that's nice.")
+      else:
+        print(" -> login doesn't work :(")
 
     if method == "post":
       if "warning" in response.content:
-        # success is also notified using a warning span
-        wtext = re.search('<span class="warning">([^<]*)</span>', response.content).group(1)
-        print(" -> transfer warning: %s" % wtext)
+        if verbose > 0:
+          # success is also notified using a warning span
+          wtext = re.search('<span class="warning">([^<]*)</span>', response.content).group(1)
+          print(" -> transfer warning: %s" % wtext)
       else:
         print(" -> NO TRANSFER WARNING?!")
         print(80 * "-")
@@ -177,7 +179,7 @@ def test_stuff():
         # requests, and which user the request was issued as, but this seems
         # outside the scope of the exercise?
 
-fuzzy.concolic_test(test_stuff, maxiter=2000, verbose=verbose)
+fuzzy.concolic_test(test_stuff, maxiter=2000, v=verbose)
 
 if cov is not None:
   print "Coverage report stored in covhtml/"
