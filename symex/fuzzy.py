@@ -277,6 +277,8 @@ simplify_patterns = [
   (sym_concat(patname("a"), const_str("")),
    patname("a")
   ),
+]
+new_simplify_patterns = [
   (sym_plus(patname("x"), const_int(0)),
    patname("x")
   ),
@@ -301,6 +303,7 @@ simplify_patterns = [
    patname("a")
   ),
 ]
+simplify_patterns += new_simplify_patterns
 
 def pattern_match(expr, pat, vars):
   if isinstance(pat, patname):
@@ -787,8 +790,10 @@ def concolic_test(testfunc, maxiter = 100, verbose = 0,
       (ok, model) = (None, None)
       if usecexcache:
         (ok, model) = check_cache(new_path_condition, cexcache)
-      if ok != None:
-        print "USED CEXCACHE"
+        if ok != None:
+          print "USED CEXCACHE"
+        else:
+          (ok, model) = fork_and_check(new_path_condition)
       else:
         (ok, model) = fork_and_check(new_path_condition)
       checked_paths.add(new_path_condition)

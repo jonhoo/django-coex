@@ -14,6 +14,7 @@ import __builtin__
 import inspect
 import symex.importwrapper as importwrapper
 import symex.rewriter as rewriter
+import time
 
 importwrapper.rewrite_imports(rewriter.rewriter)
 
@@ -163,7 +164,11 @@ def test_stuff():
         # requests, and which user the request was issued as, but this seems
         # outside the scope of the exercise?
 
+
+start = time.time()
 fuzzy.concolic_test(test_stuff, maxiter=2000, verbose=verbose,
-                    uniqueinputs = False,
-                    removeredundant = False,
-                    usecexcache = False)
+                    uniqueinputs = True,
+                    removeredundant = True,
+                    usecexcache = True)
+end = time.time()
+print "%.2f seconds" %(end-start)
