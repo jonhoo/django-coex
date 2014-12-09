@@ -163,4 +163,7 @@ def test_stuff():
         # requests, and which user the request was issued as, but this seems
         # outside the scope of the exercise?
 
-fuzzy.concolic_test(test_stuff, maxiter=2000, verbose=verbose)
+fuzzy.concolic_test(test_stuff, maxiter=2000, verbose=verbose,
+                    uniqueinputs = False,
+                    removeredundant = False,
+                    usecexcache = False)
