@@ -12,8 +12,6 @@ import re
 import symex.fuzzy as fuzzy
 import __builtin__
 import inspect
-import symex.importwrapper as importwrapper
-import symex.rewriter as rewriter
 
 # NOTE(jon): This needs to come before we start the rewriter
 cov = None
@@ -21,8 +19,6 @@ import sys
 if len(sys.argv) > 1 and sys.argv[-1] == '-c':
   from coverage import coverage
   cov = True
-
-importwrapper.rewrite_imports(rewriter.rewriter)
 
 from symex.symdjango import SymDjango, post_data
 import symex.symeval
