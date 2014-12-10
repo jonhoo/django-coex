@@ -129,6 +129,10 @@ def newget(self, *args, **kwargs):
 
 #django.db.models.QuerySet.get = newget
 
+import symex.importwrapper as importwrapper
+import symex.rewriter as rewriter
+importwrapper.rewrite_imports(rewriter.rewriter)
+
 # It's only safe to use SymDjango as a singleton!
 class SymDjango():
   def __init__(self, settings, path, viewmap):
@@ -204,7 +208,7 @@ class SymResolver():
       if r is not None:
         return r
 
-      raise Resolver404({'path': path})
+    raise Resolver404({'path': path})
 
   def _reverse_with_prefix(self, v, _prefix, *args, **kwargs):
     return "<reverse: %s>" % v
