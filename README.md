@@ -10,9 +10,9 @@ maintain a separate fork at https://github.com/jonhoo/django-concolic,
 currently based off 1.7 stable, which may include modifications that are
 necessary to get concolic execution to work properly.
 
-The code is based on the concolic execution framework built for [Lab
-3](http://css.csail.mit.edu/6.858/2014/labs/lab3.html) in MIT's class 6.858
-Computer Security, Fall 2014.
+The code is based heavily on the (MIT licensed) concolic execution framework
+built for [Lab 3](http://css.csail.mit.edu/6.858/2014/labs/lab3.html) in MIT's
+class 6.858 Computer Security, Fall 2014.
 
 To get django-coex up and running for Zoobar, do the following:
 
