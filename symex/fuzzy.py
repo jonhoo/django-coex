@@ -82,6 +82,9 @@ class const_str(sym_ast):
       return False
     return self.v == o.v
 
+  def __ne__(self, o):
+    return not self.__eq__(o)
+
   def __hash__(self):
     return hash(self.v)
 
@@ -104,6 +107,9 @@ class const_int(sym_ast):
       return False
     return self.i == o.i
 
+  def __ne__(self, o):
+    return not self.__eq__(o)
+
   def __hash__(self):
     return hash(self.i)
 
@@ -118,6 +124,9 @@ class const_bool(sym_ast):
     if not isinstance(o, const_bool):
       return False
     return self.b == o.b
+
+  def __ne__(self, o):
+    return not self.__eq__(o)
 
   def __hash__(self):
     return hash(self.b)
@@ -260,7 +269,7 @@ class patname(sym_ast):
     self.name = name
     self.pattern = pattern
 
-simplify_patterns = [
+simplify_patterns_strings = [
   (sym_substring(patname("a",
                          sym_substring(patname("b"),
                                        patname("c"),
@@ -278,7 +287,18 @@ simplify_patterns = [
    patname("a")
   ),
 ]
-new_simplify_patterns = [
+simplify_patterns_logic = [
+  (sym_not(sym_not(patname("a"))),
+   patname("a")
+  ),
+  (sym_not(sym_eq(patname("a"), const_bool(False))),
+   sym_eq(patname("a"), const_bool(True))
+  ),
+  (sym_not(sym_eq(patname("a"), const_bool(True))),
+   sym_eq(patname("a"), const_bool(False))
+  ),
+]
+simplify_patterns_arithmetic = [
   (sym_plus(patname("x"), const_int(0)),
    patname("x")
   ),
@@ -299,11 +319,11 @@ new_simplify_patterns = [
              sym_mul(patname("b"), patname("x"))),
    sym_mul(sym_minus(patname("a"), patname("b")), patname("x"))
   ),
-  (sym_not(sym_not(patname("a"))),
-   patname("a")
-  ),
 ]
-simplify_patterns += new_simplify_patterns
+simplify_patterns = []
+simplify_patterns += simplify_patterns_strings
+simplify_patterns += simplify_patterns_logic
+# simplify_patterns += simplify_patterns_arithmetic
 
 def pattern_match(expr, pat, vars):
   if isinstance(pat, patname):
@@ -710,13 +730,13 @@ concrete_values = {}
 def mk_int(id, value = 0):
   global concrete_values
   if id not in concrete_values:
-    concrete_values[id] = value 
+    concrete_values[id] = value
   return concolic_int(sym_int(id), concrete_values[id])
 
 def mk_str(id, value = ''):
   global concrete_values
   if id not in concrete_values:
-    concrete_values[id] = value 
+    concrete_values[id] = value
   return concolic_str(sym_str(id), concrete_values[id])
 
 def concolic_test(testfunc, maxiter = 100, verbose = 0,
@@ -840,10 +860,23 @@ def issubset(candidate_set, context_set):
   return True
 
 def extend_and_prune(partial_path, branch_condition):
+  branch_condition = simplify(branch_condition)
+  branch_condition = simplify_StartsWith(branch_condition)
+
   ## Remove any constraints in partial_path that are
   ## implied by branch_condition.
   prune_set = []
   for constraint in partial_path:
+    # resultZ3 = Z3implies(branch_condition, constraint)
+    # result = implies(branch_condition, constraint)
+    # if resultZ3 and not result:
+      # print "MISSED IMPLICATION"
+      # print "  ", branch_condition
+      # print "  ", constraint
+    # if not resultZ3 and result:
+      # print "FALSE IMPLICATION"
+      # print "  ", branch_condition
+      # print "  ", constraint
     if implies(branch_condition, constraint):
       prune_set.append(constraint)
   if len(prune_set) > 0:
@@ -854,18 +887,103 @@ def extend_and_prune(partial_path, branch_condition):
   ## If none are removed above, see if any constraints
   ## in partial_path imply branch_condition.
   for constraint in partial_path:
+    # resultZ3 = Z3implies(constraint, branch_condition)
+    # result = implies(constraint, branch_condition)
+    # if resultZ3 and not result:
+      # print "MISSED IMPLICATION"
+      # print "  ", constraint
+      # print "  ", branch_condition
+    # if not resultZ3 and result:
+      # print "FALSE IMPLICATION"
+      # print "  ", constraint
+      # print "  ", branch_condition
     if implies(constraint, branch_condition):
       return partial_path
 
   ## Otherwise return the standard append.
   return partial_path + [branch_condition]
 
-def implies(antecedent, consequent):
+def simplify_StartsWith(expr):
+  if isinstance(expr, sym_eq) and \
+       isinstance(expr.args[0], sym_startswith):
+    startswithfn = expr.args[0]
+    if isinstance(startswithfn.args[1], const_str):
+      subexpr = startswithfn.args[0]
+      value = startswithfn.args[1]
+      return sym_eq(sym_eq(sym_substring(subexpr,
+                                         const_int(0),
+                                         const_int(len(value.v))),
+                           value),
+                    expr.args[1])
+  return expr
+
+def Z3implies(antecedent, consequent):
   ## Want to prove Antecedent --> Consequent, or (not A) OR (C).
   ## So try to find a counterexample, solve for (A) AND (not C).
   ## If no solution (unsat), then the implication is true; otherwise false.
   (ok, _) = fork_and_check(sym_and(antecedent, sym_not(consequent)))
   return (ok == z3.unsat)
+
+def implies(antecedent, consequent):
+  ## If both sides are equal, then trivially true.
+  if antecedent == consequent:
+    return True
+
+  ## Identify whether the antecedent is an equality assignment.
+  if equalityImplies(antecedent, consequent):
+    return True
+
+  ## Try proving the contra-positive: (not C) IMPLIES (not A)
+  if isinstance(antecedent, sym_eq) and \
+       isinstance(antecedent.args[1], const_bool) and \
+       isinstance(consequent, sym_eq) and \
+       isinstance(consequent.args[1], const_bool):
+    if equalityImplies(
+         sym_eq(consequent.args[0], const_bool(not consequent.args[1].b)),
+         sym_eq(antecedent.args[0], const_bool(not antecedent.args[1].b))):
+      return True
+
+  ## Last resort: make an expensive call to Z3.
+  ## Want to prove Antecedent IMPLIES Consequent, that is (not A) OR (C).
+  ## So try to find a counterexample, solve for (A) AND (not C).
+  ## If no solution (unsat), then the implication is true; otherwise false.
+  # (ok, _) = fork_and_check(sym_and(antecedent, sym_not(consequent)))
+  # if ok == z3.unsat:
+    # print "Z3 says", antecedent, "IMPLIES", consequent
+  # return (ok == z3.unsat)
+
+  return False
+
+def equalityImplies(a, c):
+
+  if isinstance(a, sym_eq) and \
+       isinstance(a.args[0], sym_eq) and \
+       a.args[1] == const_bool(True):
+    var1 = a.args[0].args[0]
+    value1 = a.args[0].args[1]
+
+    if isinstance(c, sym_eq) and \
+         isinstance(c.args[0], sym_eq) and \
+         c.args[1] == const_bool(False):
+      var2 = c.args[0].args[0]
+      value2 = c.args[0].args[1]
+      if var2 == var1 and value2 != value1:
+        return True
+
+    if isinstance(value1, const_str) and \
+         isinstance(c, sym_eq) and \
+         c.args[1] == const_bool(False) and \
+         isinstance(c.args[0], sym_eq) and \
+         isinstance(c.args[0].args[0], sym_substring):
+      substringfn = c.args[0].args[0]
+      substringval = c.args[0].args[1]
+      if substringfn.args[0] == var1:
+        start = substringfn.args[1].i
+        end = substringfn.args[2].i
+        if value1.v[start:end] != substringval.v:
+          return True
+
+  return False
 
 def isrelevant(ast):
   global concrete_values
