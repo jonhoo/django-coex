@@ -10,10 +10,6 @@ verbose = 1
 import os
 import re
 import symex.fuzzy as fuzzy
-import __builtin__
-import inspect
-import symex.importwrapper as importwrapper
-import symex.rewriter as rewriter
 import time
 
 # NOTE(jon): This needs to come before we start the rewriter
