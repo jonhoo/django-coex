@@ -168,22 +168,93 @@ class SQLSymQuerySet(QuerySet, SymMixin):
     pass
 
 
+# SymQuerySet that just iterates through every row in the DB
+class AllSymQuerySet(QuerySet, SymMixin):
+  def _convert_pk(self, **kwargs):
+    for key in kwargs:
+      if key != 'pk':
+        continue
+
+      newkey = self.model._meta.pk.name
+      kwargs[newkey] = kwargs['pk']
+      del kwargs['pk']
+
+    return kwargs
+
+  def _is_match(self, real, obj, **kwargs):
+    for key in kwargs:
+      value = kwargs[key]
+
+      lookups, parts, reffed_aggregate = self.query.solve_lookup_type(key)
+
+      self._create_branch(value, obj, lookups, parts)
+    
+    if obj == real:
+      return True
+
+    return False
+
+  def _create_branch(self, value, obj, lookup, props):
+    if len(lookup) != 1:
+      return
+
+    obj_attr = self._get_attr(obj, props)
+
+    op = lookup[0]
+    if op == 'gt' and obj_attr > value:
+      pass
+    if op == 'gte' and obj_attr >= value:
+      pass
+    if op == 'lt' and obj_attr < value:
+      pass
+    if op == 'lte' and obj_attr <= value:
+      pass
+    if op == 'exact' and obj_attr == value:
+      pass
+
+  def _get_attr(self, obj, props):
+    result = obj
+    for prop in props:
+      if hasattr(obj, prop):
+        result = getattr(obj, prop)
+    return result
+
+  def get(self, *args, **kwargs):
+    import django.contrib.sessions.models
+    if self.model is django.contrib.sessions.models.Session:
+      return self._old_get(AllSymQuerySet, *args, **kwargs)
+
+    kwargs = self._convert_pk(**kwargs)
+
+    real = None
+    try:
+      real = self._old_get(AllSymQuerySet, *args, **kwargs)
+    except self.model.DoesNotExist:
+      pass
+
+    for m in self.model.objects.all():
+      if self._is_match(real, m, **kwargs):
+        return m
+
+    return self._old_get(AllSymQuerySet, *args, **kwargs)
+
 # SymQuerySet that creates mutations based on ConSMutate
-class MutationSymQuerySet(QuerySet, SymMixin):
+class MutationSymQuerySet(AllSymQuerySet, SymMixin):
   operators = ['lte', 'gte', 'gt', 'lt', 'exact']
+  condition_cache = set()
 
   def filter(self, *args, **kwargs):
     (op, value, mutations) = self._mutate(*args, **kwargs)
-    actual = self._apply_filter(*args, **kwargs)
 
-    self.test(op, value)
-    if isinstance(value, concolic_int):
-      mutations = self._remove_dead_mutations(actual, mutations)
-      self._create_constraints(op, value, mutations)
+    actual = self._apply_filter(*args, **kwargs)
+    if not isinstance(value, concolic_int):
+      return actual
+
+    mutations = self._remove_dead_mutations(actual, mutations)
+    self._create_constraints(op, value, mutations)
     return actual
 
   def test(self, op, value):
-    import pdb; pdb.set_trace()
     if op == 'gt':
       if value > value:
         pass
@@ -197,7 +268,7 @@ class MutationSymQuerySet(QuerySet, SymMixin):
   def _apply_filter(self, *args, **kwargs):
     from django.core.exceptions import FieldError
     try:
-      return super(SymQuerySet, self).filter(*args, **kwargs)
+      return super(MutationSymQuerySet, self).filter(*args, **kwargs)
     except FieldError: 
       return None
 
@@ -278,18 +349,36 @@ class MutationSymQuerySet(QuerySet, SymMixin):
 
   def _create_constraints(self, original_op, sym, mutations):
     original = self._create_condition(original_op, sym)
-    t_original = sym_eq(original, True)
-    f_original = sym_eq(original, False)
+    t_original = sym_eq(original, ast(True))
+    f_original = sym_eq(original, ast(False))
 
     for op in mutations:
       mutant = self._create_condition(op, sym)
       if mutant is None:
         return None
 
-      t_mutant = sym_eq(mutant, True)
-      f_mutant = sym_eq(mutant, False)
+      t_mutant = sym_eq(mutant, ast(True))
+      f_mutant = sym_eq(mutant, ast(False))
     
-      return sym_or(sym_and(t_original, f_mutant), sym_and(f_original, t_mutant))
+      condition = sym_not(sym_or(sym_and(t_original, f_mutant), sym_and(f_original, t_mutant)))
+
+      if self._in_cache(condition):
+        continue
+
+      fuzzy.cur_path_constr = []
+      fuzzy.cur_path_constr_callers = []
+      fuzzy.add_constr(sym_and(sym_not(fuzzy.path_condition), condition))
+      self._add_to_cache(condition)
+      return
+
+  def _hash_condition(self, condition):
+    return str(condition)
+
+  def _add_to_cache(self, condition):
+    return self.condition_cache.add(self._hash_condition(condition))
+
+  def _in_cache(self, condition):
+    return self._hash_condition(condition) in self.condition_cache
 
   def _create_condition(self, op, sym):
     sym_type = None
@@ -300,82 +389,16 @@ class MutationSymQuerySet(QuerySet, SymMixin):
       sym_type = sym_lt
     elif op == 'exact':
       sym_type = sym_eq
+    elif op == 'gte':
+      sym_type = sym_gte
+    elif op == 'lte':
+      sym_type = sym_lte
+
 
     if sym_type is None:
       return None
 
     return sym_type(ast(sym), ast(sym.concrete_value()))
-
-
-# SymQuerySet that just iterates through every row in the DB
-class AllSymQuerySet(QuerySet, SymMixin):
-  def _convert_pk(self, **kwargs):
-    for key in kwargs:
-      if key != 'pk':
-        continue
-
-      newkey = self.model._meta.pk.name
-      kwargs[newkey] = kwargs['pk']
-      del kwargs['pk']
-
-    return kwargs
-
-  def _is_match(self, real, obj, **kwargs):
-    for key in kwargs:
-      value = kwargs[key]
-
-      lookups, parts, reffed_aggregate = self.query.solve_lookup_type(key)
-
-      self._create_branch(value, obj, lookups, parts)
-    
-    if obj == real:
-      return True
-
-    return False
-
-  def _create_branch(self, value, obj, lookup, props):
-    if len(lookup) != 1:
-      return
-
-    obj_attr = self._get_attr(obj, props)
-
-    op = lookup[0]
-    if op == 'gt' and obj_attr > value:
-      pass
-    if op == 'gte' and obj_attr >= value:
-      pass
-    if op == 'lt' and obj_attr < value:
-      pass
-    if op == 'lte' and obj_attr <= value:
-      pass
-    if op == 'exact' and obj_attr == value:
-      pass
-
-  def _get_attr(self, obj, props):
-    result = obj
-    for prop in props:
-      if hasattr(obj, prop):
-        result = getattr(obj, prop)
-    return result
-
-  def get(self, *args, **kwargs):
-    import django.contrib.sessions.models
-    if self.model is django.contrib.sessions.models.Session:
-      return self._old_get(AllSymQuerySet, *args, **kwargs)
-
-    kwargs = self._convert_pk(**kwargs)
-
-    real = None
-    try:
-      real = self._old_get(AllSymQuerySet, *args, **kwargs)
-    except self.model.DoesNotExist:
-      pass
-
-    for m in self.model.objects.all():
-      if self._is_match(real, m, **kwargs):
-        return m
-
-    return self._old_get(AllSymQuerySet, *args, **kwargs)
 
 class SymManager(Manager, SymMixin):
   def __init__(self, manager, queryset_cls):
@@ -393,6 +416,9 @@ class SymManager(Manager, SymMixin):
 
     if self.queryset_cls == SQLSymQuerySet:
       return SQLSymQuerySet(self.model, using=self._db, hints=self._hints)
+
+    if self.queryset_cls == MutationSymQuerySet:
+      return MutationSymQuerySet(self.model, using=self._db, hints=self._hints)
 
     print 'No SymQuerySet selected'
     return QuerySet(self.model, using=self._db, hints=self._hints)

@@ -184,9 +184,17 @@ class sym_lt(sym_binop):
   def _z3expr(self, printable):
     return z3expr(self.a, printable) < z3expr(self.b, printable)
 
+class sym_lte(sym_binop):
+  def _z3expr(self, printable):
+    return z3expr(self.a, printable) <= z3expr(self.b, printable)
+
 class sym_gt(sym_binop):
   def _z3expr(self, printable):
     return z3expr(self.a, printable) > z3expr(self.b, printable)
+
+class sym_gte(sym_binop):
+  def _z3expr(self, printable):
+    return z3expr(self.a, printable) >= z3expr(self.b, printable)
 
 class sym_plus(sym_binop):
   def _z3expr(self, printable):
@@ -555,6 +563,9 @@ class concolic_str(str):
     self.__sym = sym
     return self
 
+  def concrete_value(self):
+    return self.__v
+
   def __eq__(self, o):
     if not isinstance(o, str) and not isinstance(o, unicode):
       return False
@@ -797,6 +808,7 @@ def concolic_test(testfunc, maxiter = 100, v = 0,
     partial_path = []
     for (branch_condition, caller) in \
         zip(cur_path_constr, cur_path_constr_callers):
+
 
       ## Identify a new branch forked off the current path,
       ## but skip it if it has been solved before.

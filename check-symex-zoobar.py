@@ -40,7 +40,7 @@ if cov is not None:
 
 from zapp.models import Person, Transfer
 from django.contrib.auth.models import User
-from symex.symqueryset import AllSymQuerySet, SQLSymQuerySet
+from symex.symqueryset import AllSymQuerySet, SQLSymQuerySet, MutationSymQuerySet
 d.setup_models([
   {'model': User, 'queryset': AllSymQuerySet},
   {'model': Person, 'queryset': AllSymQuerySet},
