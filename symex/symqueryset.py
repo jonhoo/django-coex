@@ -254,16 +254,6 @@ class MutationSymQuerySet(AllSymQuerySet, SymMixin):
     self._create_constraints(op, value, mutations)
     return actual
 
-  def test(self, op, value):
-    if op == 'gt':
-      if value > value:
-        pass
-    elif op == 'lt':
-      if value < value:
-        pass
-    elif op == 'exact':
-      if value == value:
-        pass
 
   def _apply_filter(self, *args, **kwargs):
     from django.core.exceptions import FieldError
